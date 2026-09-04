@@ -1,8 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { OrganizationType } from "@prisma/client";
-import { prisma } from "@/lib/prisma";
+import { OrganizationType } from "@/lib/domain/types";
+import { firestoreDb } from "@/lib/firebase/firestore-db";
 import { requireAuthorizedSession } from "@/lib/auth/guards";
 import { toPublicErrorMessage } from "@/lib/errors";
 import { writeAuditLog } from "@/lib/audit";
@@ -32,13 +32,13 @@ export async function createCategoryAction(formData: FormData): Promise<ActionRe
     }
 
     const slug = itemSlug(parsed.data.name);
-    const existing = await prisma.serviceCategory.findUnique({ where: { slug } });
+    const existing = await firestoreDb.serviceCategory.findUnique({ where: { slug } });
     if (existing && !existing.deletedAt) {
       return { ok: false, message: "Já existe uma categoria com este nome." };
     }
 
     if (existing?.deletedAt) {
-      await prisma.serviceCategory.update({
+      await firestoreDb.serviceCategory.update({
         where: { id: existing.id },
         data: {
           name: parsed.data.name,
@@ -49,7 +49,7 @@ export async function createCategoryAction(formData: FormData): Promise<ActionRe
         },
       });
     } else {
-      await prisma.serviceCategory.create({
+      await firestoreDb.serviceCategory.create({
         data: {
           name: parsed.data.name,
           slug,
@@ -87,7 +87,7 @@ export async function updateCategoryAction(formData: FormData): Promise<ActionRe
       return { ok: false, message: "Dados inválidos" };
     }
 
-    await prisma.serviceCategory.update({
+    await firestoreDb.serviceCategory.update({
       where: { id },
       data: {
         name: parsed.data.name,
@@ -117,14 +117,14 @@ export async function softDeleteCategoryAction(formData: FormData): Promise<Acti
     const id = String(formData.get("id") ?? "");
     if (!id) return { ok: false, message: "Categoria inválida" };
 
-    const linked = await prisma.quotation.count({ where: { categoryId: id } });
+    const linked = await firestoreDb.quotation.count({ where: { categoryId: id } });
     if (linked > 0) {
-      await prisma.serviceCategory.update({
+      await firestoreDb.serviceCategory.update({
         where: { id },
         data: { isActive: false, deletedAt: new Date() },
       });
     } else {
-      await prisma.serviceCategory.update({
+      await firestoreDb.serviceCategory.update({
         where: { id },
         data: { isActive: false, deletedAt: new Date() },
       });
@@ -160,7 +160,7 @@ export async function createServiceItemAction(formData: FormData): Promise<Actio
     }
 
     const slug = itemSlug(parsed.data.name);
-    await prisma.serviceItem.upsert({
+    await firestoreDb.serviceItem.upsert({
       where: {
         categoryId_slug: {
           categoryId: parsed.data.categoryId,
@@ -215,7 +215,7 @@ export async function updateServiceItemAction(formData: FormData): Promise<Actio
       return { ok: false, message: "Dados inválidos" };
     }
 
-    await prisma.serviceItem.update({
+    await firestoreDb.serviceItem.update({
       where: { id },
       data: {
         name: parsed.data.name,
@@ -246,8 +246,8 @@ export async function softDeleteServiceItemAction(formData: FormData): Promise<A
     const categoryId = String(formData.get("categoryId") ?? "");
     if (!id) return { ok: false, message: "Serviço inválido" };
 
-    const linked = await prisma.quotation.count({ where: { serviceItemId: id } });
-    await prisma.serviceItem.update({
+    const linked = await firestoreDb.quotation.count({ where: { serviceItemId: id } });
+    await firestoreDb.serviceItem.update({
       where: { id },
       data: { isActive: false, deletedAt: new Date() },
     });

@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/prisma";
+import { firestoreDb } from "@/lib/firebase/firestore-db";
 import { notifyOrgMembers } from "@/features/notifications/service";
 import { sendTemplatedEmail } from "@/features/notifications/email-provider";
 
@@ -18,18 +18,18 @@ function daysBetween(from: Date, to: Date): number {
 }
 
 async function alreadySent(dedupeKey: string): Promise<boolean> {
-  const existing = await prisma.reminderDispatch.findUnique({ where: { dedupeKey } });
+  const existing = await firestoreDb.reminderDispatch.findUnique({ where: { dedupeKey } });
   return Boolean(existing);
 }
 
 async function markSent(dedupeKey: string, kind: string, entityId: string) {
-  await prisma.reminderDispatch.create({
+  await firestoreDb.reminderDispatch.create({
     data: { dedupeKey, kind, entityId },
   });
 }
 
 async function remindSolicitantes(reminderDays: number[], now: Date) {
-  const open = await prisma.quotation.findMany({
+  const open = await firestoreDb.quotation.findMany({
     where: { status: { in: ["aberta", "em_negociacao"] } },
     include: {
       organization: { include: { members: { include: { user: true } } } },
@@ -70,7 +70,7 @@ async function remindSolicitantes(reminderDays: number[], now: Date) {
 }
 
 async function remindFornecedores(now: Date) {
-  const invites = await prisma.quotationInvite.findMany({
+  const invites = await firestoreDb.quotationInvite.findMany({
     where: { status: "pendente", declinedAt: null },
     include: {
       quotation: true,
@@ -117,7 +117,7 @@ async function remindFornecedores(now: Date) {
 }
 
 export async function runReminderJob(now = new Date()) {
-  const settings = await prisma.platformSettings.findUnique({ where: { id: "default" } });
+  const settings = await firestoreDb.platformSettings.findUnique({ where: { id: "default" } });
   const reminderDays = parseReminderDays(settings?.reminderDaysJson);
   const solicitante = await remindSolicitantes(reminderDays, now);
   const fornecedor = await remindFornecedores(now);

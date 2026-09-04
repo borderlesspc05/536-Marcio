@@ -59,6 +59,8 @@ Em produção, configure `PAYMENT_PROVIDER=asaas`,
 
 ## Deploy (Spark-compatible)
 
+Guia completo: [`doc/deploy-firebase.md`](doc/deploy-firebase.md)
+
 ### App Next.js → Vercel
 
 1. Conecte o repositório na Vercel.
@@ -69,6 +71,8 @@ Em produção, configure `PAYMENT_PROVIDER=asaas`,
 ### Firebase (Spark) — rules + Storage + landing estática
 
 ```bash
+npm run firebase:deploy
+# ou:
 npx firebase-tools@latest deploy --only firestore:rules,storage,hosting --project marcio-ab7d9
 ```
 

@@ -1,6 +1,6 @@
-import { MemberRole, OrganizationType } from "@prisma/client";
+import { MemberRole, OrganizationType } from "@/lib/domain/types";
 import { requireAuthorizedSession } from "@/lib/auth/guards";
-import { prisma } from "@/lib/prisma";
+import { firestoreDb } from "@/lib/firebase/firestore-db";
 import { toggleFavoriteSupplierAction } from "@/features/favorites/actions";
 import { Button } from "@/components/ui/Button";
 import { can, getPlanGate } from "@/features/billing/plan-gate";
@@ -26,7 +26,7 @@ export default async function FavoritosPage() {
   }
 
   const [suppliers, favorites, categories] = await Promise.all([
-    prisma.organization.findMany({
+    firestoreDb.organization.findMany({
       where: { type: "fornecedor" },
       orderBy: { name: "asc" },
       include: {
@@ -38,18 +38,24 @@ export default async function FavoritosPage() {
         },
       },
     }),
-    prisma.favoriteSupplier.findMany({
-      where: { organizationId: session.organizationId },
+    firestoreDb.favoriteSupplier.findMany({
+      where: { ownerOrgId: session.organizationId },
       include: { category: true },
     }),
-    prisma.serviceCategory.findMany({
+    firestoreDb.serviceCategory.findMany({
       where: { deletedAt: null, isActive: true },
       orderBy: { sortOrder: "asc" },
       select: { id: true, name: true },
     }),
   ]);
 
-  const favoriteBySupplier = new Map(favorites.map((item) => [item.supplierOrgId, item]));
+  type FavoriteRecord = {
+    supplierOrgId: string;
+    category?: { name: string } | null;
+  };
+  const favoriteBySupplier = new Map<string, FavoriteRecord>(
+    favorites.map((item) => [item.supplierOrgId, item]),
+  );
 
   return (
     <div className="space-y-6">

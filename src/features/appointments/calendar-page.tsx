@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import { requireAuthorizedSession } from "@/lib/auth/guards";
-import { prisma } from "@/lib/prisma";
+import { firestoreDb } from "@/lib/firebase/firestore-db";
 import { listAppointments, listAccessibleCondominiums } from "@/features/appointments/data";
 import { AppointmentCreateForm } from "@/features/appointments/components/AppointmentCreateForm";
 import { AppointmentFiltersBar } from "@/features/appointments/components/AppointmentFiltersBar";
@@ -46,11 +46,11 @@ export async function renderCalendarPage({
       role: session.role,
       serviceClientId,
     }),
-    prisma.serviceCategory.findMany({
+    firestoreDb.serviceCategory.findMany({
       where: { isActive: true, deletedAt: null },
       orderBy: { sortOrder: "asc" },
     }),
-    prisma.serviceItem.findMany({
+    firestoreDb.serviceItem.findMany({
       where: { isActive: true, deletedAt: null },
       orderBy: { sortOrder: "asc" },
       select: { id: true, name: true, categoryId: true },

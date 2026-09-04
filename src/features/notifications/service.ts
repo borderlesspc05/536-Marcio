@@ -1,5 +1,5 @@
-import { MemberRole } from "@prisma/client";
-import { prisma } from "@/lib/prisma";
+import { MemberRole } from "@/lib/domain/types";
+import { firestoreDb } from "@/lib/firebase/firestore-db";
 
 export type CreateNotificationInput = {
   userId: string;
@@ -12,7 +12,7 @@ export type CreateNotificationInput = {
 };
 
 export async function createNotification(input: CreateNotificationInput) {
-  return prisma.notification.create({
+  return firestoreDb.notification.create({
     data: {
       userId: input.userId,
       organizationId: input.organizationId ?? null,
@@ -38,7 +38,7 @@ export async function notifyOrgMembers(
     mastersOnly?: boolean;
   },
 ) {
-  const members = await prisma.organizationMember.findMany({
+  const members = await firestoreDb.organizationMember.findMany({
     where: {
       organizationId,
       ...(input.mastersOnly
@@ -52,9 +52,9 @@ export async function notifyOrgMembers(
 
   if (members.length === 0) return [];
 
-  return prisma.$transaction(
+  return firestoreDb.$transaction(
     members.map((member) =>
-      prisma.notification.create({
+      firestoreDb.notification.create({
         data: {
           userId: member.userId,
           organizationId,
@@ -70,13 +70,13 @@ export async function notifyOrgMembers(
 }
 
 export async function getUnreadCount(userId: string): Promise<number> {
-  return prisma.notification.count({
+  return firestoreDb.notification.count({
     where: { userId, readAt: null },
   });
 }
 
 export async function listNotifications(userId: string, take = 50) {
-  return prisma.notification.findMany({
+  return firestoreDb.notification.findMany({
     where: { userId },
     orderBy: { createdAt: "desc" },
     take,

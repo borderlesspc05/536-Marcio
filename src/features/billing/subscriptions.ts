@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "crypto";
-import type { Plan, Subscription } from "@prisma/client";
-import { prisma } from "@/lib/prisma";
+import type { Plan, Subscription } from "@/lib/domain/types";
+import { firestoreDb } from "@/lib/firebase/firestore-db";
 import { writeAuditLog } from "@/lib/audit";
 import { AppError } from "@/lib/errors";
 import { getPaymentProvider } from "@/features/billing/payment-provider";
@@ -19,8 +19,8 @@ function yearMonth(date = new Date()): string {
 
 async function getCheckoutCustomer(organizationId: string, userId: string) {
   const [organization, user] = await Promise.all([
-    prisma.organization.findUniqueOrThrow({ where: { id: organizationId } }),
-    prisma.user.findUniqueOrThrow({ where: { id: userId } }),
+    firestoreDb.organization.findUniqueOrThrow({ where: { id: organizationId } }),
+    firestoreDb.user.findUniqueOrThrow({ where: { id: userId } }),
   ]);
   return {
     name: organization.name,
@@ -35,7 +35,7 @@ export function makeIdempotencyKey(parts: string[]): string {
 }
 
 export async function getActiveSubscription(organizationId: string) {
-  return prisma.subscription.findFirst({
+  return firestoreDb.subscription.findFirst({
     where: { organizationId, status: { in: ["active", "past_due"] } },
     include: { plan: true, pendingPlan: true },
     orderBy: { createdAt: "desc" },
@@ -44,7 +44,7 @@ export async function getActiveSubscription(organizationId: string) {
 
 export async function applyPendingDowngrades(): Promise<number> {
   const now = new Date();
-  const due = await prisma.subscription.findMany({
+  const due = await firestoreDb.subscription.findMany({
     where: {
       cancelAtPeriodEnd: true,
       pendingPlanId: { not: null },
@@ -78,10 +78,10 @@ export async function activatePlanChange(input: {
   checkoutId?: string;
   prorationCents?: number;
 }) {
-  const toPlan = await prisma.plan.findUniqueOrThrow({ where: { id: input.toPlanId } });
+  const toPlan = await firestoreDb.plan.findUniqueOrThrow({ where: { id: input.toPlanId } });
   const current =
     input.subscription ??
-    (await prisma.subscription.findFirst({
+    (await firestoreDb.subscription.findFirst({
       where: { organizationId: input.organizationId },
       include: { plan: true, pendingPlan: true },
       orderBy: { createdAt: "desc" },
@@ -96,7 +96,7 @@ export async function activatePlanChange(input: {
     current.plan.priceCents > toPlan.priceCents
   ) {
     // Downgrade: agenda para fim do ciclo (inclui Free)
-    await prisma.subscription.update({
+    await firestoreDb.subscription.update({
       where: { id: current.id },
       data: {
         cancelAtPeriodEnd: true,
@@ -104,7 +104,7 @@ export async function activatePlanChange(input: {
         currentPeriodEnd: current.currentPeriodEnd ?? periodEnd,
       },
     });
-    await prisma.subscriptionChange.create({
+    await firestoreDb.subscriptionChange.create({
       data: {
         organizationId: input.organizationId,
         fromPlanId: current.planId,
@@ -142,7 +142,7 @@ export async function activatePlanChange(input: {
 
   // Upgrade / free / activate immediate
   if (current) {
-    await prisma.subscription.update({
+    await firestoreDb.subscription.update({
       where: { id: current.id },
       data: {
         planId: toPlan.id,
@@ -156,7 +156,7 @@ export async function activatePlanChange(input: {
       },
     });
   } else {
-    await prisma.subscription.create({
+    await firestoreDb.subscription.create({
       data: {
         organizationId: input.organizationId,
         planId: toPlan.id,
@@ -168,7 +168,7 @@ export async function activatePlanChange(input: {
     });
   }
 
-  await prisma.subscriptionChange.create({
+  await firestoreDb.subscriptionChange.create({
     data: {
       organizationId: input.organizationId,
       fromPlanId: current?.planId ?? null,
@@ -188,7 +188,7 @@ export async function activatePlanChange(input: {
     metadata: { plan: toPlan.slug, changeType: input.changeType },
   });
 
-  await prisma.domainEvent.create({
+  await firestoreDb.domainEvent.create({
     data: {
       type: "subscription.activated",
       entityType: "organization",
@@ -220,10 +220,10 @@ export async function createPlanCheckout(input: {
   await applyPendingDowngrades();
 
   const [plan, org, current] = await Promise.all([
-    prisma.plan.findFirst({
+    firestoreDb.plan.findFirst({
       where: { slug: input.planSlug, isActive: true },
     }),
-    prisma.organization.findUniqueOrThrow({
+    firestoreDb.organization.findUniqueOrThrow({
       where: { id: input.organizationId },
     }),
     getActiveSubscription(input.organizationId),
@@ -310,7 +310,7 @@ export async function createPlanCheckout(input: {
     randomUUID(),
   ]);
 
-  const checkout = await prisma.paymentCheckout.create({
+  const checkout = await firestoreDb.paymentCheckout.create({
     data: {
       organizationId: input.organizationId,
       userId: input.userId,
@@ -342,19 +342,19 @@ export async function createPlanCheckout(input: {
     customer,
   });
 
-  await prisma.paymentCheckout.update({
+  await firestoreDb.paymentCheckout.update({
     where: { id: checkout.id },
     data: { externalId: session.externalId, provider: session.provider },
   });
 
   // Marca subscription como pending até webhook
   if (current) {
-    await prisma.subscription.update({
+    await firestoreDb.subscription.update({
       where: { id: current.id },
       data: { status: current.status === "active" ? "active" : "pending" },
     });
   } else {
-    await prisma.subscription.create({
+    await firestoreDb.subscription.create({
       data: {
         organizationId: input.organizationId,
         planId: plan.id,
@@ -390,7 +390,7 @@ export async function createCategoryAddonCheckout(input: {
     throw new Error("Selecione exatamente a quantidade de categorias.");
   }
 
-  const settings = await prisma.platformSettings.findUnique({ where: { id: "default" } });
+  const settings = await firestoreDb.platformSettings.findUnique({ where: { id: "default" } });
   const unitPrice = settings?.categoryAddonPriceCents ?? 2900;
   const total = unitPrice * input.quantity;
 
@@ -401,7 +401,7 @@ export async function createCategoryAddonCheckout(input: {
     randomUUID(),
   ]);
 
-  const checkout = await prisma.paymentCheckout.create({
+  const checkout = await firestoreDb.paymentCheckout.create({
     data: {
       organizationId: input.organizationId,
       userId: input.userId,
@@ -417,7 +417,7 @@ export async function createCategoryAddonCheckout(input: {
     },
   });
 
-  await prisma.categoryAddonPurchase.create({
+  await firestoreDb.categoryAddonPurchase.create({
     data: {
       organizationId: input.organizationId,
       quantity: input.quantity,
@@ -442,7 +442,7 @@ export async function createCategoryAddonCheckout(input: {
     customer,
   });
 
-  await prisma.paymentCheckout.update({
+  await firestoreDb.paymentCheckout.update({
     where: { id: checkout.id },
     data: { externalId: session.externalId, provider: session.provider },
   });
@@ -469,7 +469,7 @@ export async function createCustomBillingCheckout(input: {
 
   let planId: string | null = null;
   if (input.planSlug) {
-    const plan = await prisma.plan.findFirst({
+    const plan = await firestoreDb.plan.findFirst({
       where: { slug: input.planSlug, isActive: true },
     });
     if (!plan) throw new Error("Plano de referência não encontrado.");
@@ -484,7 +484,7 @@ export async function createCustomBillingCheckout(input: {
     randomUUID(),
   ]);
 
-  const checkout = await prisma.paymentCheckout.create({
+  const checkout = await firestoreDb.paymentCheckout.create({
     data: {
       organizationId: input.organizationId,
       userId: input.userId,
@@ -515,7 +515,7 @@ export async function createCustomBillingCheckout(input: {
     customer,
   });
 
-  await prisma.paymentCheckout.update({
+  await firestoreDb.paymentCheckout.update({
     where: { id: checkout.id },
     data: { externalId: session.externalId, provider: session.provider },
   });
@@ -537,7 +537,7 @@ export async function createCustomBillingCheckout(input: {
 }
 
 export async function fulfillCheckoutPaid(checkoutId: string, userId?: string | null) {
-  const checkout = await prisma.paymentCheckout.findUnique({
+  const checkout = await firestoreDb.paymentCheckout.findUnique({
     where: { id: checkoutId },
     include: { plan: true },
   });
@@ -547,7 +547,7 @@ export async function fulfillCheckoutPaid(checkoutId: string, userId?: string | 
     // Um novo pagamento confirmado reativa a conta após eventual inadimplência.
     if (checkout.provider === "asaas" && checkout.kind === "plan") {
       const now = new Date();
-      await prisma.subscription.updateMany({
+      await firestoreDb.subscription.updateMany({
         where: { organizationId: checkout.organizationId },
         data: {
           status: "active",
@@ -559,7 +559,7 @@ export async function fulfillCheckoutPaid(checkoutId: string, userId?: string | 
     return { alreadyProcessed: true as const, checkout };
   }
 
-  await prisma.paymentCheckout.update({
+  await firestoreDb.paymentCheckout.update({
     where: { id: checkout.id },
     data: { status: "paid", paidAt: new Date() },
   });
@@ -607,13 +607,13 @@ export async function fulfillCheckoutPaid(checkoutId: string, userId?: string | 
     const categoryIds = metadata.categoryIds ?? [];
     const unitPrice = metadata.unitPriceCents ?? Math.round(checkout.amountCents / checkout.quantity);
     for (const categoryId of categoryIds) {
-      const firstSegment = await prisma.serviceItem.findFirst({
+      const firstSegment = await firestoreDb.serviceItem.findFirst({
         where: { categoryId, deletedAt: null, isActive: true },
         orderBy: { sortOrder: "asc" },
       });
       if (!firstSegment) continue;
 
-      const existing = await prisma.organizationCategory.findFirst({
+      const existing = await firestoreDb.organizationCategory.findFirst({
         where: {
           organizationId: checkout.organizationId,
           categoryId,
@@ -621,7 +621,7 @@ export async function fulfillCheckoutPaid(checkoutId: string, userId?: string | 
         },
       });
       if (existing) {
-        await prisma.organizationCategory.update({
+        await firestoreDb.organizationCategory.update({
           where: { id: existing.id },
           data: {
             isAddon: true,
@@ -631,7 +631,7 @@ export async function fulfillCheckoutPaid(checkoutId: string, userId?: string | 
           },
         });
       } else {
-        await prisma.organizationCategory.create({
+        await firestoreDb.organizationCategory.create({
           data: {
             organizationId: checkout.organizationId,
             categoryId,
@@ -644,7 +644,7 @@ export async function fulfillCheckoutPaid(checkoutId: string, userId?: string | 
         });
       }
     }
-    await prisma.categoryAddonPurchase.updateMany({
+    await firestoreDb.categoryAddonPurchase.updateMany({
       where: { checkoutId: checkout.id },
       data: { status: "paid" },
     });
@@ -658,7 +658,7 @@ export async function fulfillCheckoutPaid(checkoutId: string, userId?: string | 
     metadata: { kind: checkout.kind, amountCents: checkout.amountCents },
   });
 
-  await prisma.domainEvent.create({
+  await firestoreDb.domainEvent.create({
     data: {
       type: "checkout.paid",
       entityType: "payment_checkout",
@@ -672,14 +672,14 @@ export async function fulfillCheckoutPaid(checkoutId: string, userId?: string | 
 }
 
 export async function markCheckoutFailed(checkoutId: string, status: "failed" | "canceled" | "past_due") {
-  const checkout = await prisma.paymentCheckout.findUnique({ where: { id: checkoutId } });
+  const checkout = await firestoreDb.paymentCheckout.findUnique({ where: { id: checkoutId } });
   if (!checkout) return checkout;
 
   // O checkout de uma assinatura recorrente já fica "paid" após o primeiro
   // ciclo, mas cobranças futuras vencidas ainda devem bloquear o plano.
   if (checkout.status === "paid") {
     if (status === "past_due" && checkout.provider === "asaas") {
-      await prisma.subscription.updateMany({
+      await firestoreDb.subscription.updateMany({
         where: { organizationId: checkout.organizationId, status: "active" },
         data: { status: "past_due" },
       });
@@ -687,7 +687,7 @@ export async function markCheckoutFailed(checkoutId: string, status: "failed" | 
     return checkout;
   }
 
-  await prisma.paymentCheckout.update({
+  await firestoreDb.paymentCheckout.update({
     where: { id: checkoutId },
     data: {
       status: status === "past_due" ? "failed" : status,
@@ -696,7 +696,7 @@ export async function markCheckoutFailed(checkoutId: string, status: "failed" | 
   });
 
   if (status === "past_due") {
-    await prisma.subscription.updateMany({
+    await firestoreDb.subscription.updateMany({
       where: { organizationId: checkout.organizationId, status: "active" },
       data: { status: "past_due" },
     });
@@ -712,7 +712,7 @@ export async function markCheckoutFailed(checkoutId: string, status: "failed" | 
 }
 
 async function completeMigrationAfterPayment(migrationId: string, userId?: string | null) {
-  const migration = await prisma.organizationMigration.findUnique({
+  const migration = await firestoreDb.organizationMigration.findUnique({
     where: { id: migrationId },
     include: { targetPlan: true },
   });
@@ -720,14 +720,14 @@ async function completeMigrationAfterPayment(migrationId: string, userId?: strin
   if (migration.status === "approved") return;
 
   if (migration.targetPlan.isFree) {
-    await prisma.organizationMigration.update({
+    await firestoreDb.organizationMigration.update({
       where: { id: migration.id },
       data: { status: "rejected", reviewNotes: "Bloqueado: plano Free" },
     });
     throw new Error("Migração para Administradora Free é impossível.");
   }
 
-  await prisma.$transaction(async (tx) => {
+  await firestoreDb.$transaction(async (tx) => {
     await tx.organization.update({
       where: { id: migration.organizationId },
       data: { type: "administradora" },

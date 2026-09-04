@@ -53,3 +53,5 @@ firebase-debug.log
 firebase-debug.*.log
 .firebase/
 .env*
+*-firebase-adminsdk*.json
+*firebase-adminsdk*.json

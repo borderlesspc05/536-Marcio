@@ -15,7 +15,6 @@ const eslintConfig = [
       ".next/**",
       ".firebase/**",
       "node_modules/**",
-      "prisma/dev.db",
       "public/**",
       "doc/**",
       "next-env.d.ts",

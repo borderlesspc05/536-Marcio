@@ -1,6 +1,6 @@
-import { MemberRole, OrganizationType } from "@prisma/client";
+import { MemberRole, OrganizationType } from "../src/lib/domain/types";
 import { canAccessHref, getNavItemsForSession } from "../src/features/navigation/menu";
-import { prisma } from "../src/lib/prisma";
+import { firestoreDb } from "../src/lib/firebase/firestore-db";
 import { verifyPassword } from "../src/lib/auth/password";
 
 const BASE = "http://localhost:3000";
@@ -78,7 +78,7 @@ async function main() {
   ] as const;
 
   for (const c of cases) {
-    const user = await prisma.user.findUnique({ where: { email: c.email } });
+    const user = await firestoreDb.user.findUnique({ where: { email: c.email } });
     if (!user?.emailVerifiedAt) throw new Error("user missing " + c.email);
     if (!(await verifyPassword("123456", user.passwordHash))) {
       throw new Error("password fail " + c.email);
@@ -100,9 +100,9 @@ async function main() {
     console.log(c.email, "=>", menu.join(", "));
   }
 
-  const settings = await prisma.platformSettings.findUnique({ where: { id: "default" } });
-  const plans = await prisma.plan.count();
-  const marketing = await prisma.marketingSettings.findUnique({ where: { id: "default" } });
+  const settings = await firestoreDb.platformSettings.findUnique({ where: { id: "default" } });
+  const plans = await firestoreDb.plan.count();
+  const marketing = await firestoreDb.marketingSettings.findUnique({ where: { id: "default" } });
   if (!settings || settings.freeQuotaSolicitante !== 15) {
     throw new Error("platform settings invalid");
   }
@@ -119,5 +119,5 @@ main()
     process.exit(1);
   })
   .finally(async () => {
-    await prisma.$disconnect();
+    await firestoreDb.$disconnect();
   });

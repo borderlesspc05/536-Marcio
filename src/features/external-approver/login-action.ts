@@ -1,7 +1,7 @@
 "use server";
 
-import { MemberRole } from "@prisma/client";
-import { prisma } from "@/lib/prisma";
+import { MemberRole } from "@/lib/domain/types";
+import { firestoreDb } from "@/lib/firebase/firestore-db";
 import { toPublicErrorMessage } from "@/lib/errors";
 import {
   createSessionToken,
@@ -25,7 +25,7 @@ export async function serviceClientLoginAction(formData: FormData): Promise<Acti
       return { ok: false, message: "Portal indisponível." };
     }
 
-    const user = await prisma.user.findUnique({ where: { email } });
+    const user = await firestoreDb.user.findUnique({ where: { email } });
     if (!user || !user.passwordHash) {
       return { ok: false, message: "Credenciais inválidas." };
     }
@@ -35,7 +35,7 @@ export async function serviceClientLoginAction(formData: FormData): Promise<Acti
       return { ok: false, message: "Credenciais inválidas." };
     }
 
-    const membership = await prisma.organizationMember.findUnique({
+    const membership = await firestoreDb.organizationMember.findUnique({
       where: {
         userId_organizationId: {
           userId: user.id,
@@ -49,7 +49,7 @@ export async function serviceClientLoginAction(formData: FormData): Promise<Acti
       return { ok: false, message: "Usuário sem perfil de aprovador externo neste portal." };
     }
 
-    const scopeCount = await prisma.externalApproverScope.count({
+    const scopeCount = await firestoreDb.externalApproverScope.count({
       where: {
         userId: user.id,
         organizationId: serviceClient.clientOrgId,
@@ -61,7 +61,7 @@ export async function serviceClientLoginAction(formData: FormData): Promise<Acti
     }
 
     if (!user.emailVerifiedAt) {
-      await prisma.user.update({
+      await firestoreDb.user.update({
         where: { id: user.id },
         data: { emailVerifiedAt: new Date() },
       });

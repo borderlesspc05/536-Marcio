@@ -1,6 +1,6 @@
-import { OrganizationType } from "@prisma/client";
+import { OrganizationType } from "@/lib/domain/types";
 import { requireAuthorizedSession } from "@/lib/auth/guards";
-import { prisma } from "@/lib/prisma";
+import { firestoreDb } from "@/lib/firebase/firestore-db";
 import {
   deleteBannerAction,
   updateMarketingLinksAction,
@@ -23,9 +23,9 @@ export default async function BannersAdminPage() {
   });
 
   const [banners, settings, users] = await Promise.all([
-    prisma.landingBanner.findMany({ orderBy: { sortOrder: "asc" } }),
-    prisma.marketingSettings.findUnique({ where: { id: "default" } }),
-    prisma.user.findMany({
+    firestoreDb.landingBanner.findMany({ orderBy: { sortOrder: "asc" } }),
+    firestoreDb.marketingSettings.findUnique({ where: { id: "default" } }),
+    firestoreDb.user.findMany({
       select: { id: true, email: true, name: true },
       orderBy: { email: "asc" },
       take: 50,
@@ -77,6 +77,19 @@ export default async function BannersAdminPage() {
               placeholder="https://fornecedores.exemplo.com"
               className="mt-1 h-10 w-full rounded-xl border border-black/10 px-3"
             />
+          </label>
+          <label className="text-sm md:col-span-2">
+            Vídeo da página de fornecedores (YouTube)
+            <input
+              name="supplierVideoUrl"
+              type="url"
+              defaultValue={settings?.supplierVideoUrl ?? ""}
+              placeholder="https://www.youtube.com/watch?v=..."
+              className="mt-1 h-10 w-full rounded-xl border border-black/10 px-3"
+            />
+            <span className="mt-1 block text-xs text-neutral-500">
+              Cole a URL do vídeo. O player será exibido na página sem abrir o YouTube em outra aba.
+            </span>
           </label>
           <label className="text-sm">
             Máx. banners ativos

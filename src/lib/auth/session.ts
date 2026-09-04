@@ -1,7 +1,7 @@
 import { SignJWT, jwtVerify } from "jose";
 import { cookies } from "next/headers";
-import { MemberRole, OrganizationType } from "@prisma/client";
-import { prisma } from "@/lib/prisma";
+import { MemberRole, OrganizationType } from "@/lib/domain/types";
+import { firestoreDb } from "@/lib/firebase/firestore-db";
 
 export const SESSION_COOKIE = "cotacondo_session";
 
@@ -72,7 +72,7 @@ export async function requireSession(): Promise<SessionPayload> {
 }
 
 export async function buildSessionForUser(userId: string): Promise<SessionPayload | null> {
-  const membership = await prisma.organizationMember.findFirst({
+  const membership = await firestoreDb.organizationMember.findFirst({
     where: { userId },
     include: {
       user: true,

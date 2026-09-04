@@ -7,7 +7,7 @@ import {
   firebaseSignUp,
   firebaseUpdatePassword,
 } from "../src/lib/firebase/auth-rest";
-import { prisma } from "../src/lib/prisma";
+import { firestoreDb } from "../src/lib/firebase/firestore-db";
 
 const DEMO_PASSWORD = "123456";
 const LEGACY_PASSWORD = "Demo@123456";
@@ -57,7 +57,7 @@ async function main() {
   console.log("Sincronizando usuários demo no Firebase Auth…");
   for (const email of DEMO_USERS) {
     const uid = await ensureFirebaseUser(email);
-    await prisma.user.updateMany({
+    await firestoreDb.user.updateMany({
       where: { email },
       data: {
         firebaseUid: uid,
@@ -74,5 +74,5 @@ main()
     process.exit(1);
   })
   .finally(async () => {
-    await prisma.$disconnect();
+    await firestoreDb.$disconnect();
   });

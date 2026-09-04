@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CheckCircle2, LayoutDashboard, Receipt } from "lucide-react";
-import { prisma } from "@/lib/prisma";
+import { firestoreDb } from "@/lib/firebase/firestore-db";
 import { formatPriceCents } from "@/features/billing/plan-gate";
 import { getMarketingSettings } from "@/features/marketing/data";
 import {
@@ -40,7 +40,7 @@ function checkoutItemLabel(checkout: {
 export default async function SandboxPayPage({ params }: PageProps) {
   const { checkoutId } = await params;
   const [checkout, marketing] = await Promise.all([
-    prisma.paymentCheckout.findUnique({
+    firestoreDb.paymentCheckout.findUnique({
       where: { id: checkoutId },
       include: { plan: true },
     }),

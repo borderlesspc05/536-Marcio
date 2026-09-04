@@ -1,9 +1,9 @@
-import type { ServicePipelineStatus } from "@prisma/client";
-import { prisma } from "@/lib/prisma";
+import type { ServicePipelineStatus } from "@/lib/domain/types";
+import { firestoreDb } from "@/lib/firebase/firestore-db";
 import { SERVICE_PIPELINE_ORDER } from "./pipeline";
 
 export async function listServiceClients(managedByOrgId: string) {
-  return prisma.serviceClient.findMany({
+  return firestoreDb.serviceClient.findMany({
     where: { managedByOrgId },
     include: {
       clientOrg: true,
@@ -15,7 +15,7 @@ export async function listServiceClients(managedByOrgId: string) {
 }
 
 export async function getServiceClient(id: string, managedByOrgId: string) {
-  return prisma.serviceClient.findFirst({
+  return firestoreDb.serviceClient.findFirst({
     where: { id, managedByOrgId },
     include: {
       clientOrg: true,
@@ -25,7 +25,7 @@ export async function getServiceClient(id: string, managedByOrgId: string) {
 }
 
 export async function getServicePipelineCounts(managedByOrgId: string) {
-  const groups = await prisma.quotation.groupBy({
+  const groups = await firestoreDb.quotation.groupBy({
     by: ["servicePipelineStatus"],
     where: {
       serviceManagedByOrgId: managedByOrgId,
@@ -53,7 +53,7 @@ export async function listServiceQuotations(input: {
   serviceClientId?: string;
   take?: number;
 }) {
-  return prisma.quotation.findMany({
+  return firestoreDb.quotation.findMany({
     where: {
       serviceManagedByOrgId: input.managedByOrgId,
       ...(input.status ? { servicePipelineStatus: input.status } : {}),
@@ -81,7 +81,7 @@ export async function listServiceQuotations(input: {
 }
 
 export async function getServiceQuotation(id: string, managedByOrgId: string) {
-  return prisma.quotation.findFirst({
+  return firestoreDb.quotation.findFirst({
     where: { id, serviceManagedByOrgId: managedByOrgId },
     include: {
       condominium: true,
@@ -107,7 +107,7 @@ export async function getServiceQuotation(id: string, managedByOrgId: string) {
 }
 
 export async function getServiceReports(managedByOrgId: string) {
-  const clients = await prisma.serviceClient.findMany({
+  const clients = await firestoreDb.serviceClient.findMany({
     where: { managedByOrgId },
     select: { id: true, displayName: true, clientOrgId: true },
   });
@@ -115,19 +115,19 @@ export async function getServiceReports(managedByOrgId: string) {
   const clientOrgIds = clients.map((c) => c.clientOrgId);
 
   const [byStatus, byCategory, topOrgs, volumeBySupplier] = await Promise.all([
-    prisma.quotation.groupBy({
+    firestoreDb.quotation.groupBy({
       by: ["servicePipelineStatus"],
       where: { serviceManagedByOrgId: managedByOrgId },
       _count: { _all: true },
     }),
-    prisma.quotation.groupBy({
+    firestoreDb.quotation.groupBy({
       by: ["categoryId"],
       where: { serviceManagedByOrgId: managedByOrgId },
       _count: { _all: true },
       orderBy: { _count: { categoryId: "desc" } },
       take: 10,
     }),
-    prisma.quotation.groupBy({
+    firestoreDb.quotation.groupBy({
       by: ["organizationId"],
       where: {
         serviceManagedByOrgId: managedByOrgId,
@@ -137,7 +137,7 @@ export async function getServiceReports(managedByOrgId: string) {
       orderBy: { _count: { organizationId: "desc" } },
       take: 10,
     }),
-    prisma.proposal.findMany({
+    firestoreDb.proposal.findMany({
       where: {
         status: "aprovada",
         quotation: { serviceManagedByOrgId: managedByOrgId },
@@ -150,10 +150,10 @@ export async function getServiceReports(managedByOrgId: string) {
     }),
   ]);
 
-  const categories = await prisma.serviceCategory.findMany({
+  const categories = await firestoreDb.serviceCategory.findMany({
     where: { id: { in: byCategory.map((r) => r.categoryId) } },
   });
-  const orgs = await prisma.organization.findMany({
+  const orgs = await firestoreDb.organization.findMany({
     where: { id: { in: topOrgs.map((r) => r.organizationId) } },
   });
 
@@ -189,25 +189,25 @@ export async function getServiceReports(managedByOrgId: string) {
 
 export async function getMarketIntelligence() {
   const [byRegionHint, byCategory, topRequesters, avgByCategory] = await Promise.all([
-    prisma.condominium.groupBy({
+    firestoreDb.condominium.groupBy({
       by: ["address"],
       _count: { _all: true },
       orderBy: { _count: { address: "desc" } },
       take: 15,
     }),
-    prisma.quotation.groupBy({
+    firestoreDb.quotation.groupBy({
       by: ["categoryId"],
       _count: { _all: true },
       orderBy: { _count: { categoryId: "desc" } },
       take: 10,
     }),
-    prisma.quotation.groupBy({
+    firestoreDb.quotation.groupBy({
       by: ["organizationId"],
       _count: { _all: true },
       orderBy: { _count: { organizationId: "desc" } },
       take: 10,
     }),
-    prisma.proposalCondition.findMany({
+    firestoreDb.proposalCondition.findMany({
       take: 200,
       orderBy: { createdAt: "desc" },
       include: {
@@ -220,10 +220,10 @@ export async function getMarketIntelligence() {
     }),
   ]);
 
-  const categories = await prisma.serviceCategory.findMany({
+  const categories = await firestoreDb.serviceCategory.findMany({
     where: { id: { in: byCategory.map((r) => r.categoryId) } },
   });
-  const orgs = await prisma.organization.findMany({
+  const orgs = await firestoreDb.organization.findMany({
     where: { id: { in: topRequesters.map((r) => r.organizationId) } },
   });
 

@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/prisma";
+import { firestoreDb } from "@/lib/firebase/firestore-db";
 
 export type EmailTemplate =
   | "min_proposals_reached"
@@ -24,7 +24,7 @@ export interface EmailProvider {
 
 export class ConsoleEmailProvider implements EmailProvider {
   async send(input: SendEmailInput) {
-    const row = await prisma.emailOutbox.create({
+    const row = await firestoreDb.emailOutbox.create({
       data: {
         toEmail: input.toEmail,
         subject: input.subject,
@@ -46,7 +46,7 @@ export class ResendEmailProvider implements EmailProvider {
   constructor(private readonly apiKey: string) {}
 
   async send(input: SendEmailInput) {
-    const queued = await prisma.emailOutbox.create({
+    const queued = await firestoreDb.emailOutbox.create({
       data: {
         toEmail: input.toEmail,
         subject: input.subject,
@@ -74,13 +74,13 @@ export class ResendEmailProvider implements EmailProvider {
       if (!response.ok) {
         throw new Error(`Resend HTTP ${response.status}`);
       }
-      await prisma.emailOutbox.update({
+      await firestoreDb.emailOutbox.update({
         where: { id: queued.id },
         data: { status: "sent", sentAt: new Date() },
       });
       return { id: queued.id, status: "sent" };
     } catch (error) {
-      await prisma.emailOutbox.update({
+      await firestoreDb.emailOutbox.update({
         where: { id: queued.id },
         data: {
           status: "failed",

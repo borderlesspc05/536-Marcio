@@ -1,4 +1,4 @@
-import type { ServicePipelineStatus } from "@prisma/client";
+import type { ServicePipelineStatus } from "@/lib/domain/types";
 
 export const SERVICE_PIPELINE_LABELS: Record<ServicePipelineStatus, string> = {
   em_liberacao: "Em Liberação",

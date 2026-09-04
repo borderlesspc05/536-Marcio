@@ -12,7 +12,7 @@ export class AppError extends Error {
 }
 
 function isInternalErrorMessage(message: string): boolean {
-  return /NEXT_|prisma|EPERM|ENOENT|Invariant|digest|query_engine|SQLITE/i.test(
+  return /NEXT_|Firestore|Firebase|EPERM|ENOENT|Invariant|digest/i.test(
     message,
   );
 }

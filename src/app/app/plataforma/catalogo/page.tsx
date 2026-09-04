@@ -1,13 +1,13 @@
 import Link from "next/link";
 import { requireAuthorizedSession } from "@/lib/auth/guards";
-import { prisma } from "@/lib/prisma";
+import { firestoreDb } from "@/lib/firebase/firestore-db";
 import { Button } from "@/components/ui/Button";
 import { createCategoryAction, softDeleteCategoryAction } from "@/features/catalog/actions";
 
 export default async function CatalogPage() {
   await requireAuthorizedSession({ href: "/app/plataforma/catalogo" });
 
-  const categories = await prisma.serviceCategory.findMany({
+  const categories = await firestoreDb.serviceCategory.findMany({
     where: { deletedAt: null },
     include: { _count: { select: { items: { where: { deletedAt: null } } } } },
     orderBy: { sortOrder: "asc" },

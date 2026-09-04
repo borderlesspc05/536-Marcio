@@ -2,8 +2,8 @@
 
 import { randomBytes } from "crypto";
 import { revalidatePath } from "next/cache";
-import { MemberRole, OrganizationType } from "@prisma/client";
-import { prisma } from "@/lib/prisma";
+import { MemberRole, OrganizationType } from "@/lib/domain/types";
+import { firestoreDb } from "@/lib/firebase/firestore-db";
 import { requireAuthorizedSession } from "@/lib/auth/guards";
 import { toPublicErrorMessage } from "@/lib/errors";
 import { writeAuditLog } from "@/lib/audit";
@@ -21,19 +21,19 @@ export async function ensureReferralCodeAction(): Promise<ActionResult> {
       href: "/app/indicacoes",
     });
 
-    const user = await prisma.user.findUniqueOrThrow({ where: { id: session.userId } });
+    const user = await firestoreDb.user.findUniqueOrThrow({ where: { id: session.userId } });
     if (user.referralCode) {
       return { ok: true, code: user.referralCode, message: "Código já existia." };
     }
 
     let code = makeReferralCode();
     for (let i = 0; i < 5; i += 1) {
-      const exists = await prisma.user.findUnique({ where: { referralCode: code } });
+      const exists = await firestoreDb.user.findUnique({ where: { referralCode: code } });
       if (!exists) break;
       code = makeReferralCode();
     }
 
-    await prisma.user.update({
+    await firestoreDb.user.update({
       where: { id: session.userId },
       data: { referralCode: code },
     });
@@ -73,9 +73,9 @@ export async function inviteTeamMemberAction(formData: FormData): Promise<Action
       return { ok: false, message: "Papel inválido." };
     }
 
-    const existing = await prisma.user.findUnique({ where: { email } });
+    const existing = await firestoreDb.user.findUnique({ where: { email } });
     if (existing) {
-      const already = await prisma.organizationMember.findUnique({
+      const already = await firestoreDb.organizationMember.findUnique({
         where: {
           userId_organizationId: {
             userId: existing.id,
@@ -85,7 +85,7 @@ export async function inviteTeamMemberAction(formData: FormData): Promise<Action
       });
       if (already) return { ok: false, message: "Usuário já está na organização." };
 
-      await prisma.organizationMember.create({
+      await firestoreDb.organizationMember.create({
         data: {
           userId: existing.id,
           organizationId: session.organizationId,
@@ -97,9 +97,9 @@ export async function inviteTeamMemberAction(formData: FormData): Promise<Action
       const { hashPassword } = await import("@/lib/auth/password");
       const tempPassword = `Convite@${randomBytes(3).toString("hex")}`;
       const passwordHash = await hashPassword(tempPassword);
-      const referrer = await prisma.user.findUnique({ where: { id: session.userId } });
+      const referrer = await firestoreDb.user.findUnique({ where: { id: session.userId } });
 
-      const created = await prisma.user.create({
+      const created = await firestoreDb.user.create({
         data: {
           email,
           name,
@@ -115,7 +115,7 @@ export async function inviteTeamMemberAction(formData: FormData): Promise<Action
         },
       });
 
-      const code = await prisma.emailToken.create({
+      const code = await firestoreDb.emailToken.create({
         data: {
           userId: created.id,
           code: String(Math.floor(100000 + Math.random() * 900000)),
@@ -176,12 +176,12 @@ export async function registerReferralRewardAction(formData: FormData): Promise<
       return { ok: false, message: "Dados inválidos." };
     }
 
-    const referred = await prisma.user.findFirst({
+    const referred = await firestoreDb.user.findFirst({
       where: { id: referredUserId, referredByUserId: session.userId },
     });
     if (!referred) return { ok: false, message: "Indicado inválido." };
 
-    await prisma.referralReward.create({
+    await firestoreDb.referralReward.create({
       data: {
         referrerUserId: session.userId,
         referredUserId,

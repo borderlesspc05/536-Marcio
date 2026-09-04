@@ -24,7 +24,7 @@ export function Button({
         variant === "primary" &&
           "bg-[#A7115F] text-white shadow-[0_8px_18px_-10px_rgba(167,17,95,0.75)] hover:bg-[#8F0E52] hover:shadow-[0_10px_22px_-10px_rgba(167,17,95,0.8)]",
         variant === "secondary" &&
-          "border border-[#B8CAD7] bg-white text-[#173B57] shadow-sm hover:border-[#173B57]/40 hover:bg-[#EDF4F7]",
+          "border border-[#A7115F]/25 bg-[#FFF7FB] text-[#8F0E52] shadow-sm hover:border-[#A7115F]/45 hover:bg-[#FCE7F3]",
         variant === "ghost" && "text-[#A7115F] hover:bg-[#FCE7F3]",
         variant === "danger" && "bg-red-600 text-white hover:bg-red-700",
         className,

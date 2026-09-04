@@ -1,4 +1,4 @@
-import { OrganizationType } from "@prisma/client";
+import { OrganizationType } from "@/lib/domain/types";
 import { requireAuthorizedSession } from "@/lib/auth/guards";
 import { getMarketIntelligence } from "@/features/master-service/data";
 import { formatPriceCents } from "@/features/billing/money";

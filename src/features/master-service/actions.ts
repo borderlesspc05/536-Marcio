@@ -6,9 +6,9 @@ import {
   ServiceAiApiMode,
   ServicePipelineStatus,
   SupplierPipelineStage,
-} from "@prisma/client";
+} from "@/lib/domain/types";
 import { requireAuthorizedSession } from "@/lib/auth/guards";
-import { prisma } from "@/lib/prisma";
+import { firestoreDb } from "@/lib/firebase/firestore-db";
 import { emitDomainEvent } from "@/lib/domain-events";
 import { buildRifComparative, generateAiRifInsights } from "./rif";
 
@@ -46,7 +46,7 @@ export async function createServiceClientAction(formData: FormData) {
     throw new Error("Nome e organização cliente são obrigatórios.");
   }
 
-  const clientOrg = await prisma.organization.findFirst({
+  const clientOrg = await firestoreDb.organization.findFirst({
     where: {
       id: clientOrgId,
       type: { in: [OrganizationType.administradora, OrganizationType.sindico] },
@@ -54,22 +54,22 @@ export async function createServiceClientAction(formData: FormData) {
   });
   if (!clientOrg) throw new Error("Organização cliente inválida.");
 
-  const existing = await prisma.serviceClient.findUnique({
+  const existing = await firestoreDb.serviceClient.findUnique({
     where: { clientOrgId },
   });
   if (existing) throw new Error("Este cliente já está no Cota Service.");
 
   let slug = slugify(displayName) || `cliente-${Date.now()}`;
-  const slugTaken = await prisma.serviceClient.findUnique({
+  const slugTaken = await firestoreDb.serviceClient.findUnique({
     where: { solicitationLinkSlug: slug },
   });
   if (slugTaken) slug = `${slug}-${Date.now().toString(36)}`;
 
-  const cotaServicePlan = await prisma.plan.findUnique({
+  const cotaServicePlan = await firestoreDb.plan.findUnique({
     where: { slug: "cota-service" },
   });
 
-  const client = await prisma.serviceClient.create({
+  const client = await firestoreDb.serviceClient.create({
     data: {
       managedByOrgId: session.organizationId,
       clientOrgId,
@@ -86,16 +86,16 @@ export async function createServiceClientAction(formData: FormData) {
   });
 
   if (cotaServicePlan) {
-    const active = await prisma.subscription.findFirst({
+    const active = await firestoreDb.subscription.findFirst({
       where: { organizationId: clientOrgId, status: "active" },
     });
     if (active) {
-      await prisma.subscription.update({
+      await firestoreDb.subscription.update({
         where: { id: active.id },
         data: { planId: cotaServicePlan.id },
       });
     } else {
-      await prisma.subscription.create({
+      await firestoreDb.subscription.create({
         data: {
           organizationId: clientOrgId,
           planId: cotaServicePlan.id,
@@ -134,12 +134,12 @@ export async function updateServiceClientAction(formData: FormData) {
       : ServiceAiApiMode.platform;
   const aiApiKey = String(formData.get("aiApiKey") || "").trim();
 
-  const client = await prisma.serviceClient.findFirst({
+  const client = await firestoreDb.serviceClient.findFirst({
     where: { id, managedByOrgId: session.organizationId },
   });
   if (!client) throw new Error("Cliente não encontrado.");
 
-  await prisma.serviceClient.update({
+  await firestoreDb.serviceClient.update({
     where: { id },
     data: {
       displayName: displayName || client.displayName,
@@ -168,15 +168,15 @@ export async function addServiceClientManagerAction(formData: FormData) {
   const email = String(formData.get("email") || "").trim().toLowerCase();
   const roleLabel = String(formData.get("roleLabel") || "gerente").trim() || "gerente";
 
-  const client = await prisma.serviceClient.findFirst({
+  const client = await firestoreDb.serviceClient.findFirst({
     where: { id: serviceClientId, managedByOrgId: session.organizationId },
   });
   if (!client) throw new Error("Cliente não encontrado.");
   if (!name || !email) throw new Error("Nome e e-mail obrigatórios.");
 
-  const user = await prisma.user.findUnique({ where: { email } });
+  const user = await firestoreDb.user.findUnique({ where: { email } });
 
-  await prisma.serviceClientManager.create({
+  await firestoreDb.serviceClientManager.create({
     data: {
       serviceClientId,
       userId: user?.id ?? `pending:${email}`,
@@ -194,12 +194,12 @@ export async function setServicePipelineStatusAction(formData: FormData) {
   const quotationId = String(formData.get("quotationId") || "").trim();
   const status = String(formData.get("status") || "").trim() as ServicePipelineStatus;
 
-  const quotation = await prisma.quotation.findFirst({
+  const quotation = await firestoreDb.quotation.findFirst({
     where: { id: quotationId, serviceManagedByOrgId: session.organizationId },
   });
   if (!quotation) throw new Error("Cotação não encontrada.");
 
-  await prisma.quotation.update({
+  await firestoreDb.quotation.update({
     where: { id: quotationId },
     data: { servicePipelineStatus: status },
   });
@@ -214,18 +214,18 @@ export async function masterAcceptProposalAction(formData: FormData) {
   const quotationId = String(formData.get("quotationId") || "").trim();
   const proposalId = String(formData.get("proposalId") || "").trim();
 
-  const quotation = await prisma.quotation.findFirst({
+  const quotation = await firestoreDb.quotation.findFirst({
     where: { id: quotationId, serviceManagedByOrgId: session.organizationId },
     include: { serviceClient: true },
   });
   if (!quotation) throw new Error("Cotação não encontrada.");
 
-  const proposal = await prisma.proposal.findFirst({
+  const proposal = await firestoreDb.proposal.findFirst({
     where: { id: proposalId, quotationId },
   });
   if (!proposal) throw new Error("Proposta inválida.");
 
-  await prisma.quotation.update({
+  await firestoreDb.quotation.update({
     where: { id: quotationId },
     data: {
       approvedProposalId: proposalId,
@@ -237,7 +237,7 @@ export async function masterAcceptProposalAction(formData: FormData) {
   });
 
   if (quotation.requesterEmail) {
-    await prisma.emailOutbox.create({
+    await firestoreDb.emailOutbox.create({
       data: {
         toEmail: quotation.requesterEmail,
         subject: `Proposta pronta para revisão — ${quotation.publicId}`,
@@ -264,14 +264,14 @@ export async function solicitanteConfirmAcceptAction(formData: FormData) {
   const session = await requireMasterService();
   const quotationId = String(formData.get("quotationId") || "").trim();
 
-  const quotation = await prisma.quotation.findFirst({
+  const quotation = await firestoreDb.quotation.findFirst({
     where: { id: quotationId, serviceManagedByOrgId: session.organizationId },
   });
   if (!quotation?.approvedProposalId || !quotation.masterAcceptedAt) {
     throw new Error("Aceite do Master pendente.");
   }
 
-  await prisma.$transaction(async (tx) => {
+  await firestoreDb.$transaction(async (tx) => {
     await tx.proposal.update({
       where: { id: quotation.approvedProposalId! },
       data: { status: "aprovada" },
@@ -327,12 +327,12 @@ export async function markServiceExternalApprovalAction(formData: FormData) {
     throw new Error("Valor inválido.");
   }
 
-  const quotation = await prisma.quotation.findFirst({
+  const quotation = await firestoreDb.quotation.findFirst({
     where: { id: quotationId, serviceManagedByOrgId: session.organizationId },
   });
   if (!quotation) throw new Error("Cotação não encontrada.");
 
-  await prisma.quotation.update({
+  await firestoreDb.quotation.update({
     where: { id: quotationId },
     data: {
       status: "finalizada_outros",
@@ -351,7 +351,7 @@ export async function markServiceRejectedAction(formData: FormData) {
   const session = await requireMasterService();
   const quotationId = String(formData.get("quotationId") || "").trim();
 
-  await prisma.quotation.updateMany({
+  await firestoreDb.quotation.updateMany({
     where: { id: quotationId, serviceManagedByOrgId: session.organizationId },
     data: {
       status: "recusada",
@@ -368,7 +368,7 @@ export async function generateRifAction(formData: FormData) {
   const quotationId = String(formData.get("quotationId") || "").trim();
   const publish = formData.get("publish") === "on";
 
-  const quotation = await prisma.quotation.findFirst({
+  const quotation = await firestoreDb.quotation.findFirst({
     where: { id: quotationId, serviceManagedByOrgId: session.organizationId },
     include: {
       proposals: {
@@ -389,7 +389,7 @@ export async function generateRifAction(formData: FormData) {
     comparativeMarkdown: comparative.markdown,
   });
 
-  await prisma.rifAnalysis.create({
+  await firestoreDb.rifAnalysis.create({
     data: {
       quotationId,
       generatedByUserId: session.userId,
@@ -402,7 +402,7 @@ export async function generateRifAction(formData: FormData) {
   });
 
   if (publish) {
-    await prisma.quotation.update({
+    await firestoreDb.quotation.update({
       where: { id: quotationId },
       data: { rifVisibleToClient: true },
     });
@@ -415,12 +415,12 @@ export async function dispatchServiceQuotationAction(formData: FormData) {
   const session = await requireMasterService();
   const quotationId = String(formData.get("quotationId") || "").trim();
 
-  const quotation = await prisma.quotation.findFirst({
+  const quotation = await firestoreDb.quotation.findFirst({
     where: { id: quotationId, serviceManagedByOrgId: session.organizationId },
   });
   if (!quotation) throw new Error("Cotação não encontrada.");
 
-  await prisma.quotation.update({
+  await firestoreDb.quotation.update({
     where: { id: quotationId },
     data: {
       invitesPaused: false,

@@ -1,6 +1,6 @@
-import { MemberRole, OrganizationType } from "@prisma/client";
+import { MemberRole, OrganizationType } from "@/lib/domain/types";
 import { requireAuthorizedSession } from "@/lib/auth/guards";
-import { prisma } from "@/lib/prisma";
+import { firestoreDb } from "@/lib/firebase/firestore-db";
 import { can, getPlanGate } from "@/features/billing/plan-gate";
 import { FREE_PARTNERSHIP_MESSAGE } from "@/features/partnerships/messages";
 import {
@@ -29,9 +29,9 @@ export default async function ParceriasPage() {
     );
   }
 
-  const settings = await prisma.platformSettings.findUnique({ where: { id: "default" } });
+  const settings = await firestoreDb.platformSettings.findUnique({ where: { id: "default" } });
   const [partnerships, suppliers] = await Promise.all([
-    prisma.partnership.findMany({
+    firestoreDb.partnership.findMany({
       where: { administradoraOrgId: session.organizationId, status: "active" },
       include: {
         supplier: {
@@ -46,7 +46,7 @@ export default async function ParceriasPage() {
       },
       orderBy: { createdAt: "desc" },
     }),
-    prisma.organization.findMany({
+    firestoreDb.organization.findMany({
       where: { type: "fornecedor" },
       orderBy: { name: "asc" },
       include: {

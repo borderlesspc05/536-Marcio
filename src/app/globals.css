@@ -4,7 +4,7 @@
   --font-sans: var(--font-poppins), ui-sans-serif, system-ui, sans-serif;
   --brand-magenta: #a7115f;
   --brand-purple: #9333ea;
-  --brand-blue: #3b82f6;
+  --brand-blue: #102a43;
   --brand-teal: #087f8c;
   --ink: #102a43;
   --ink-body: #243b53;
@@ -46,6 +46,8 @@ a:not([class]) {
 ::selection {
   background: rgba(167, 17, 95, 0.18);
 }
+
+/* Logo sem contorno artificial — contraste vem do fundo escuro do sidebar */
 
 /* Authenticated product surface */
 .app-skip-link {

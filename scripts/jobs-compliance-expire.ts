@@ -1,7 +1,7 @@
-import { PrismaClient } from "@prisma/client";
 import { markOverdueCompliance } from "../src/features/compliance/expire";
+import { firestoreDb } from "../src/lib/firebase/firestore-db";
 
-const prisma = new PrismaClient();
+
 
 async function main() {
   const count = await markOverdueCompliance();
@@ -14,5 +14,5 @@ main()
     process.exit(1);
   })
   .finally(async () => {
-    await prisma.$disconnect();
+    await firestoreDb.$disconnect();
   });

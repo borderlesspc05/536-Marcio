@@ -1,8 +1,8 @@
 import { getLandingBannersForPublic } from "@/features/marketing/banners";
-import { prisma } from "@/lib/prisma";
+import { firestoreDb } from "@/lib/firebase/firestore-db";
 
 export async function getMarketingSettings() {
-  const settings = await prisma.marketingSettings.findUnique({ where: { id: "default" } });
+  const settings = await firestoreDb.marketingSettings.findUnique({ where: { id: "default" } });
   return {
     whatsappUrl:
       settings?.whatsappUrl ||
@@ -12,6 +12,7 @@ export async function getMarketingSettings() {
       settings?.blogUrl || process.env.NEXT_PUBLIC_BLOG_URL || "https://blog.cotacondo.com.br",
     pixelScripts: settings?.pixelScripts || null,
     supplierLpHost: settings?.supplierLpHost || null,
+    supplierVideoUrl: settings?.supplierVideoUrl || null,
   };
 }
 

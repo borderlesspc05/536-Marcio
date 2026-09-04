@@ -2,24 +2,34 @@ import { initializeApp, getApps, cert, type App, type ServiceAccount } from "fir
 import { getAuth } from "firebase-admin/auth";
 import { getFirestore } from "firebase-admin/firestore";
 import { getStorage } from "firebase-admin/storage";
+import path from "node:path";
 
 function resolveCredential() {
-  const json = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
-  if (json) {
-    const parsed = JSON.parse(json) as ServiceAccount;
-    return cert(parsed);
+  const json = process.env.FIREBASE_SERVICE_ACCOUNT_JSON?.trim();
+  if (json && json !== '""' && json !== "''" && json !== "{}") {
+    try {
+      const parsed = JSON.parse(json) as ServiceAccount;
+      if (parsed && typeof parsed === "object" && "private_key" in parsed) {
+        return cert(parsed);
+      }
+    } catch {
+      // Invalid JSON — treat as missing so callers get a clear config error.
+    }
   }
 
-  const path = process.env.GOOGLE_APPLICATION_CREDENTIALS;
-  if (path) {
-    return cert(path);
+  const credentialsPath = process.env.GOOGLE_APPLICATION_CREDENTIALS?.trim();
+  if (credentialsPath) {
+    const absolute = path.isAbsolute(credentialsPath)
+      ? credentialsPath
+      : path.resolve(process.cwd(), credentialsPath);
+    return cert(absolute);
   }
 
   return undefined;
 }
 
 export function isFirebaseAdminConfigured(): boolean {
-  return Boolean(process.env.FIREBASE_SERVICE_ACCOUNT_JSON || process.env.GOOGLE_APPLICATION_CREDENTIALS);
+  return Boolean(resolveCredential());
 }
 
 export function getFirebaseAdminApp(): App {

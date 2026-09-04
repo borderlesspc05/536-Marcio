@@ -1,4 +1,4 @@
-import { OrganizationType } from "@prisma/client";
+import { OrganizationType } from "@/lib/domain/types";
 
 const PLAN_SLUGS_BY_ORGANIZATION: Partial<Record<OrganizationType, readonly string[]>> = {
   [OrganizationType.sindico]: ["sindico-free", "sindico-pago"],

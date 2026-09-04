@@ -1,4 +1,4 @@
-import { prisma } from "../src/lib/prisma";
+import { firestoreDb } from "../src/lib/firebase/firestore-db";
 import { createNotification, getUnreadCount } from "../src/features/notifications/service";
 import { notifyAfterDomainEvent } from "../src/features/notifications/notify-after";
 import { runReminderJob } from "../src/features/notifications/reminders";
@@ -19,13 +19,13 @@ async function main() {
   }
   console.log(`Pró-rata OK: ${proration}`);
 
-  const sindico = await prisma.user.findFirst({
+  const sindico = await firestoreDb.user.findFirst({
     where: { email: "sindico@demo.cotacondo.com.br" },
   });
-  const admMaster = await prisma.user.findFirst({
+  const admMaster = await firestoreDb.user.findFirst({
     where: { email: "adm.master@demo.cotacondo.com.br" },
   });
-  const admOp = await prisma.user.findFirst({
+  const admOp = await firestoreDb.user.findFirst({
     where: { email: "adm.operacional@demo.cotacondo.com.br" },
   });
   if (!sindico || !admMaster) throw new Error("Usuários demo ausentes");
@@ -41,7 +41,7 @@ async function main() {
   if (unread < 1) throw new Error("Unread deveria ser ≥1");
   console.log(`Notificação + badge OK: unread=${unread}`);
 
-  const org = await prisma.organization.findFirst({ where: { type: "sindico" } });
+  const org = await firestoreDb.organization.findFirst({ where: { type: "sindico" } });
   if (!org) throw new Error("Org síndico ausente");
 
   await notifyAfterDomainEvent({
@@ -52,7 +52,7 @@ async function main() {
     payload: { quotationId: "smoke-quotation", code: "COT-SMOKE", proposalsCount: 3, minProposals: 3 },
   });
 
-  const email = await prisma.emailOutbox.findFirst({
+  const email = await firestoreDb.emailOutbox.findFirst({
     where: { template: "min_proposals_reached" },
     orderBy: { createdAt: "desc" },
   });
@@ -65,25 +65,25 @@ async function main() {
       entityType: "commission_entry",
       entityId: "smoke-commission",
       organizationId: (
-        await prisma.organizationMember.findFirstOrThrow({ where: { userId: admMaster.id } })
+        await firestoreDb.organizationMember.findFirstOrThrow({ where: { userId: admMaster.id } })
       ).organizationId,
       payload: {
         commissionCents: 5000,
         administradoraOrgId: (
-          await prisma.organizationMember.findFirstOrThrow({ where: { userId: admMaster.id } })
+          await firestoreDb.organizationMember.findFirstOrThrow({ where: { userId: admMaster.id } })
         ).organizationId,
       },
     });
   }
 
-  const masterNotif = await prisma.notification.findFirst({
+  const masterNotif = await firestoreDb.notification.findFirst({
     where: { userId: admMaster.id, type: "commission.expected" },
     orderBy: { createdAt: "desc" },
   });
   if (!masterNotif) throw new Error("Master deveria receber notificação de comissão");
 
   if (admOp) {
-    const opNotif = await prisma.notification.findFirst({
+    const opNotif = await firestoreDb.notification.findFirst({
       where: { userId: admOp.id, type: "commission.expected", createdAt: { gte: masterNotif.createdAt } },
     });
     if (opNotif) throw new Error("Operacional NÃO deveria receber comissão no sino");
@@ -91,22 +91,22 @@ async function main() {
   console.log("Comissão só Master OK");
 
   // Forçar cotação antiga para lembrete
-  const oldQuotation = await prisma.quotation.findFirst({
+  const oldQuotation = await firestoreDb.quotation.findFirst({
     where: { status: { in: ["aberta", "em_negociacao"] } },
   });
   if (oldQuotation) {
-    await prisma.quotation.update({
+    await firestoreDb.quotation.update({
       where: { id: oldQuotation.id },
       data: { createdAt: new Date(Date.now() - 11 * 24 * 60 * 60 * 1000) },
     });
-    await prisma.reminderDispatch.deleteMany({
+    await firestoreDb.reminderDispatch.deleteMany({
       where: { entityId: oldQuotation.id, kind: "reminder.solicitante" },
     });
   }
   const reminders = await runReminderJob();
   console.log(`Lembretes OK: ${JSON.stringify(reminders)}`);
 
-  await prisma.user.update({
+  await firestoreDb.user.update({
     where: { id: sindico.id },
     data: { referredByUserId: admMaster.id },
   });
@@ -115,20 +115,20 @@ async function main() {
   console.log(`Referral status: ${statusFree}`);
 
   const admOrgId = (
-    await prisma.organizationMember.findFirstOrThrow({ where: { userId: sindico.id } })
+    await firestoreDb.organizationMember.findFirstOrThrow({ where: { userId: sindico.id } })
   ).organizationId;
   await creditReferralOnPaidUpgrade({
     organizationId: admOrgId,
     planSlug: "sindico-pago",
   });
-  const reward = await prisma.referralReward.findFirst({
+  const reward = await firestoreDb.referralReward.findFirst({
     where: { referrerUserId: admMaster.id, referredUserId: sindico.id },
   });
   if (!reward) {
     // se plano ainda free, credit não cria — força via plan pago check
-    const gatePlan = await prisma.plan.findUnique({ where: { slug: "sindico-pago" } });
+    const gatePlan = await firestoreDb.plan.findUnique({ where: { slug: "sindico-pago" } });
     if (gatePlan && !gatePlan.isFree) {
-      const sub = await prisma.subscription.findFirst({
+      const sub = await firestoreDb.subscription.findFirst({
         where: { organizationId: admOrgId, status: "active" },
         include: { plan: true },
       });
@@ -139,7 +139,7 @@ async function main() {
   }
   console.log(`Referral reward: ${reward ? reward.amountCents : "n/a (free)"}`);
 
-  await prisma.platformSettings.update({
+  await firestoreDb.platformSettings.update({
     where: { id: "default" },
     data: {
       freeQuotaSolicitante: 15,
@@ -163,5 +163,5 @@ main()
     process.exit(1);
   })
   .finally(async () => {
-    await prisma.$disconnect();
+    await firestoreDb.$disconnect();
   });

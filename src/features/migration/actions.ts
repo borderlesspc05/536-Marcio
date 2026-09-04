@@ -2,8 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { OrganizationType } from "@prisma/client";
-import { prisma } from "@/lib/prisma";
+import { OrganizationType } from "@/lib/domain/types";
+import { firestoreDb } from "@/lib/firebase/firestore-db";
 import { requireAuthorizedSession } from "@/lib/auth/guards";
 import { toPublicErrorMessage } from "@/lib/errors";
 import { writeAuditLog } from "@/lib/audit";
@@ -37,7 +37,7 @@ export async function requestMigrationAction(formData: FormData): Promise<Action
       };
     }
 
-    const plan = await prisma.plan.findFirst({
+    const plan = await firestoreDb.plan.findFirst({
       where: { slug: planSlug, isActive: true, audience: "solicitante" },
     });
     if (!plan || plan.isFree || !PAID_ADM_SLUGS.has(plan.slug)) {
@@ -47,7 +47,7 @@ export async function requestMigrationAction(formData: FormData): Promise<Action
       };
     }
 
-    const existing = await prisma.organizationMigration.findFirst({
+    const existing = await firestoreDb.organizationMigration.findFirst({
       where: {
         organizationId: session.organizationId,
         status: { in: ["pending_payment", "pending_review"] },
@@ -57,7 +57,7 @@ export async function requestMigrationAction(formData: FormData): Promise<Action
       return { ok: false, message: "Já existe uma migração em andamento." };
     }
 
-    const migration = await prisma.organizationMigration.create({
+    const migration = await firestoreDb.organizationMigration.create({
       data: {
         organizationId: session.organizationId,
         fromType: "sindico",
@@ -76,7 +76,7 @@ export async function requestMigrationAction(formData: FormData): Promise<Action
       metadata: { migrationId: migration.id },
     });
 
-    await prisma.organizationMigration.update({
+    await firestoreDb.organizationMigration.update({
       where: { id: migration.id },
       data: { checkoutId: checkout.checkoutId },
     });
@@ -110,14 +110,14 @@ export async function reviewMigrationAction(formData: FormData): Promise<ActionR
     const decision = String(formData.get("decision") ?? "");
     const notes = String(formData.get("notes") ?? "") || null;
 
-    const migration = await prisma.organizationMigration.findUnique({
+    const migration = await firestoreDb.organizationMigration.findUnique({
       where: { id: migrationId },
       include: { targetPlan: true },
     });
     if (!migration) return { ok: false, message: "Migração não encontrada." };
 
     if (decision === "reject") {
-      await prisma.organizationMigration.update({
+      await firestoreDb.organizationMigration.update({
         where: { id: migrationId },
         data: {
           status: "rejected",
@@ -133,7 +133,7 @@ export async function reviewMigrationAction(formData: FormData): Promise<ActionR
       return { ok: false, message: "Não é possível aprovar migração para plano Free." };
     }
 
-    await prisma.$transaction(async (tx) => {
+    await firestoreDb.$transaction(async (tx) => {
       await tx.organization.update({
         where: { id: migration.organizationId },
         data: { type: "administradora" },

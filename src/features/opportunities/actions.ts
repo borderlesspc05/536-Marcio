@@ -1,8 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { OrganizationType, SupplierPipelineStage } from "@prisma/client";
-import { prisma } from "@/lib/prisma";
+import { OrganizationType, SupplierPipelineStage } from "@/lib/domain/types";
+import { firestoreDb } from "@/lib/firebase/firestore-db";
 import { requireAuthorizedSession } from "@/lib/auth/guards";
 import { toPublicErrorMessage } from "@/lib/errors";
 import { writeAuditLog } from "@/lib/audit";
@@ -43,14 +43,14 @@ export async function moveSupplierOpportunityAction(input: {
       return { ok: false, message: "Movimentação inválida." };
     }
 
-    const invite = await prisma.quotationInvite.findFirst({
+    const invite = await firestoreDb.quotationInvite.findFirst({
       where: { id: inviteId, supplierOrgId: session.organizationId },
       select: { id: true, supplierPipelineStage: true },
     });
     if (!invite) return { ok: false, message: "Oportunidade não encontrada." };
 
     const stage = input.stage as SupplierPipelineStage;
-    await prisma.quotationInvite.update({
+    await firestoreDb.quotationInvite.update({
       where: { id: invite.id },
       data: { supplierPipelineStage: stage },
     });
@@ -84,7 +84,7 @@ export async function declineInviteAction(formData: FormData): Promise<ActionRes
       return { ok: false, message: parsed.error.issues[0]?.message ?? "Dados inválidos" };
     }
 
-    const invite = await prisma.quotationInvite.findFirst({
+    const invite = await firestoreDb.quotationInvite.findFirst({
       where: {
         id: parsed.data.inviteId,
         supplierOrgId: session.organizationId,
@@ -93,7 +93,7 @@ export async function declineInviteAction(formData: FormData): Promise<ActionRes
     });
     if (!invite) return { ok: false, message: "Oportunidade não encontrada." };
 
-    await prisma.quotationInvite.update({
+    await firestoreDb.quotationInvite.update({
       where: { id: invite.id },
       data: {
         status: "declinado",
@@ -103,7 +103,7 @@ export async function declineInviteAction(formData: FormData): Promise<ActionRes
       },
     });
 
-    await prisma.domainEvent.create({
+    await firestoreDb.domainEvent.create({
       data: {
         type: "invite.declined",
         entityType: "quotation_invite",
@@ -141,7 +141,7 @@ export async function acceptInviteAction(formData: FormData): Promise<ActionResu
     });
     if (!parsed.success) return { ok: false, message: "Dados inválidos" };
 
-    const invite = await prisma.quotationInvite.findFirst({
+    const invite = await firestoreDb.quotationInvite.findFirst({
       where: {
         id: parsed.data.inviteId,
         supplierOrgId: session.organizationId,
@@ -165,7 +165,7 @@ export async function acceptInviteAction(formData: FormData): Promise<ActionResu
     }
 
     await markOverdueCompliance(session.organizationId);
-    const overdue = await prisma.complianceDocument.count({
+    const overdue = await firestoreDb.complianceDocument.count({
       where: { organizationId: session.organizationId, status: "em_atraso" },
     });
     if (overdue > 0) {
@@ -183,7 +183,7 @@ export async function acceptInviteAction(formData: FormData): Promise<ActionResu
       };
     }
 
-    await prisma.quotationInvite.update({
+    await firestoreDb.quotationInvite.update({
       where: { id: invite.id },
       data: {
         status: "aceito",
@@ -221,7 +221,7 @@ export async function submitProposalAction(formData: FormData): Promise<ActionRe
       return { ok: false, message: parsed.error.issues[0]?.message ?? "Dados inválidos" };
     }
 
-    const invite = await prisma.quotationInvite.findFirst({
+    const invite = await firestoreDb.quotationInvite.findFirst({
       where: {
         id: inviteId,
         supplierOrgId: session.organizationId,
@@ -260,7 +260,7 @@ export async function submitProposalAction(formData: FormData): Promise<ActionRe
     }
 
     await markOverdueCompliance(session.organizationId);
-    const overdue = await prisma.complianceDocument.count({
+    const overdue = await firestoreDb.complianceDocument.count({
       where: { organizationId: session.organizationId, status: "em_atraso" },
     });
     if (overdue > 0) {
@@ -270,7 +270,7 @@ export async function submitProposalAction(formData: FormData): Promise<ActionRe
       };
     }
 
-    const proposal = await prisma.$transaction(async (tx) => {
+    const proposal = await firestoreDb.$transaction(async (tx) => {
       const locked = await tx.quotation.findUnique({ where: { id: invite.quotationId } });
       if (
         !locked ||
@@ -430,7 +430,7 @@ export async function evaluateProposalPriceAction(
     }
     const proposedCents = Math.round(amount * 100);
 
-    const invite = await prisma.quotationInvite.findFirst({
+    const invite = await firestoreDb.quotationInvite.findFirst({
       where: { id: inviteId, supplierOrgId: session.organizationId },
       include: { quotation: true },
     });
@@ -438,7 +438,7 @@ export async function evaluateProposalPriceAction(
 
     const { evaluatePriceAgainstAverage } = await import("@/features/opportunities/analysis");
 
-    const sameQuotation = await prisma.proposalCondition.findMany({
+    const sameQuotation = await firestoreDb.proposalCondition.findMany({
       where: {
         proposal: {
           quotationId: invite.quotationId,
@@ -451,7 +451,7 @@ export async function evaluateProposalPriceAction(
     let source: "quotation" | "service_history" = "quotation";
 
     if (samples.length < 2) {
-      const history = await prisma.proposalCondition.findMany({
+      const history = await firestoreDb.proposalCondition.findMany({
         where: {
           proposal: {
             quotation: { serviceItemId: invite.quotation.serviceItemId },

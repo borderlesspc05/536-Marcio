@@ -1,7 +1,7 @@
 import Link from "next/link";
-import { OrganizationType } from "@prisma/client";
+import { OrganizationType } from "@/lib/domain/types";
 import { requireAuthorizedSession } from "@/lib/auth/guards";
-import { prisma } from "@/lib/prisma";
+import { firestoreDb } from "@/lib/firebase/firestore-db";
 import { getSupplierPlanInfo } from "@/features/supplier/franchise";
 import { SupplierCategoriesForm } from "@/features/supplier/components/SupplierCategoriesForm";
 import {
@@ -65,7 +65,7 @@ export default async function MeuPlanoPage({ searchParams }: PageProps) {
   if (session.organizationType === OrganizationType.fornecedor) {
     const [plan, catalog, settings] = await Promise.all([
       getSupplierPlanInfo(session.organizationId),
-      prisma.serviceCategory.findMany({
+      firestoreDb.serviceCategory.findMany({
         where: { isActive: true, deletedAt: null },
         orderBy: { sortOrder: "asc" },
         include: {
@@ -76,7 +76,7 @@ export default async function MeuPlanoPage({ searchParams }: PageProps) {
           },
         },
       }),
-      prisma.platformSettings.findUnique({ where: { id: "default" } }),
+      firestoreDb.platformSettings.findUnique({ where: { id: "default" } }),
     ]);
 
     const addonPrice = settings?.categoryAddonPriceCents ?? 2900;
@@ -217,13 +217,15 @@ export default async function MeuPlanoPage({ searchParams }: PageProps) {
         currentSlug={gate?.planSlug}
         currentPriceCents={gate?.priceCents}
         pendingSlug={subscription?.pendingPlan?.slug}
-        title="Planos disponíveis"
+        title="Planos disponíveis para o seu perfil"
+        emptyHint="Nenhum plano encontrado. Rode o seed Firestore ou confira se sindico-free e sindico-pago estão ativos."
       />
       {session.organizationType === OrganizationType.sindico ? (
         <div className="rounded-2xl border border-violet-200 bg-violet-50/70 p-5">
           <p className="font-semibold text-violet-950">Migrar para Administradora</p>
           <p className="mt-1 text-sm text-violet-900">
-            Exige plano pago intermediário ou Premium. Free é bloqueado.
+            Além dos planos de síndico acima (com checkout direto), você pode solicitar migração
+            para o perfil administradora. Exige plano pago intermediário ou Premium.
           </p>
           <Link href="/app/migracao" className="mt-3 inline-block">
             <Button type="button">Solicitar migração</Button>
@@ -280,6 +282,7 @@ function UpgradeCatalog({
   currentPriceCents,
   pendingSlug,
   title,
+  emptyHint,
 }: {
   plans: Array<{
     id: string;
@@ -293,10 +296,16 @@ function UpgradeCatalog({
   currentPriceCents?: number;
   pendingSlug?: string | null;
   title: string;
+  emptyHint?: string;
 }) {
   return (
     <div className="rounded-2xl border border-black/5 bg-white/80 p-6">
       <h2 className="text-lg font-semibold text-neutral-900">{title}</h2>
+      {plans.length === 0 ? (
+        <p className="mt-4 rounded-xl border border-dashed border-black/10 px-4 py-6 text-sm text-neutral-500">
+          {emptyHint ?? "Nenhum plano disponível no momento."}
+        </p>
+      ) : (
       <div className="mt-4 grid gap-3 md:grid-cols-2">
         {plans.map((plan) => {
           const isCurrent = plan.slug === currentSlug;
@@ -352,6 +361,7 @@ function UpgradeCatalog({
           );
         })}
       </div>
+      )}
     </div>
   );
 }

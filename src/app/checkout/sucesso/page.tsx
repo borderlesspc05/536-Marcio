@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { ArrowRight, CheckCircle2, FileText, LayoutDashboard, Receipt } from "lucide-react";
-import { prisma } from "@/lib/prisma";
+import { firestoreDb } from "@/lib/firebase/firestore-db";
 import { formatPriceCents } from "@/features/billing/plan-gate";
 import { getMarketingSettings } from "@/features/marketing/data";
 import { Button } from "@/components/ui/Button";
@@ -40,7 +40,7 @@ export default async function CheckoutSuccessPage({ searchParams }: PageProps) {
   const params = await searchParams;
   const marketing = await getMarketingSettings();
   const checkout = params.checkout
-    ? await prisma.paymentCheckout.findUnique({
+    ? await firestoreDb.paymentCheckout.findUnique({
         where: { id: params.checkout },
         include: { plan: true },
       })

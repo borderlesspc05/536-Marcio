@@ -4,9 +4,9 @@ Assets oficiais da marca para uso na landing page, LP de fornecedores e área au
 
 | Arquivo | Uso |
 |---------|-----|
-| `logo.png` | Header (lado esquerdo), favicon derivado, e-mails, PDF Whitelabel (marca plataforma) |
+| `logo-transparent-v2.png` | Header (lado esquerdo), favicon derivado, e-mails, PDF Whitelabel (marca plataforma) |
 | `mascote.png` | Bloco institucional da LP (seção C — fundo branco/transparente) |
-| `mascote-avatar-circular.png` | Avatar circular (fundo verde), ícones de chat/assistente, thumbnails |
+| `mascote-avatar-circular.png` | Avatar do mascote (fundo transparente), ícones de chat/assistente, thumbnails |
 
 ## Paleta observada na marca
 
@@ -17,7 +17,7 @@ Assets oficiais da marca para uso na landing page, LP de fornecedores e área au
 ## Caminhos no app
 
 ```
-/brand/logo.png
+/brand/logo-transparent-v2.png
 /brand/mascote.png
 /brand/mascote-avatar-circular.png
 ```

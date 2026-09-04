@@ -1,5 +1,5 @@
-import type { BannerAudienceMode, OrganizationType } from "@prisma/client";
-import { prisma } from "@/lib/prisma";
+import type { BannerAudienceMode, OrganizationType } from "@/lib/domain/types";
+import { firestoreDb } from "@/lib/firebase/firestore-db";
 
 export type AppBannerSlide = {
   id: string;
@@ -19,9 +19,9 @@ function parseJsonArray(raw: string | null | undefined): string[] {
 }
 
 export async function getLandingBannersForPublic(): Promise<AppBannerSlide[]> {
-  const settings = await prisma.marketingSettings.findUnique({ where: { id: "default" } });
+  const settings = await firestoreDb.marketingSettings.findUnique({ where: { id: "default" } });
   const take = settings?.maxActiveBanners ?? 10;
-  const banners = await prisma.landingBanner.findMany({
+  const banners = await firestoreDb.landingBanner.findMany({
     where: { isActive: true, showOnLanding: true },
     orderBy: { sortOrder: "asc" },
     take,
@@ -39,9 +39,9 @@ export async function getAppBannersForSession(input: {
   userId: string;
   organizationType: OrganizationType;
 }): Promise<AppBannerSlide[]> {
-  const settings = await prisma.marketingSettings.findUnique({ where: { id: "default" } });
+  const settings = await firestoreDb.marketingSettings.findUnique({ where: { id: "default" } });
   const take = settings?.maxActiveBanners ?? 10;
-  const banners = await prisma.landingBanner.findMany({
+  const banners = await firestoreDb.landingBanner.findMany({
     where: { isActive: true, showInApp: true },
     orderBy: { sortOrder: "asc" },
     take: 20,

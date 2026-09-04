@@ -13,10 +13,10 @@ export type BannerSlide = {
 };
 
 const GRADIENTS = [
-  "from-[#E11D8A] via-[#9333EA] to-[#3B82F6]",
-  "from-[#9333EA] via-[#3B82F6] to-[#14B8A6]",
-  "from-[#0B0B0F] via-[#9333EA] to-[#E11D8A]",
-  "from-[#06B6D4] via-[#3B82F6] to-[#9333EA]",
+  "from-[#A7115F] via-[#8F0E52] to-[#102A43]",
+  "from-[#102A43] via-[#087F8C] to-[#A7115F]",
+  "from-[#102A43] via-[#A7115F] to-[#8F0E52]",
+  "from-[#087F8C] via-[#102A43] to-[#A7115F]",
 ];
 
 type BannerCarouselProps = {

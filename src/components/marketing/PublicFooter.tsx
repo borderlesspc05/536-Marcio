@@ -25,17 +25,17 @@ export function PublicFooter({
             <p className="font-semibold text-[#0A0A0A]">Produto</p>
             <ul className="mt-3 space-y-2 text-[#6B7280]">
               <li>
-                <Link href="/#cotacao" className="hover:text-[#9333EA]">
+                <Link href="/#cotacao" className="hover:text-[#A7115F]">
                   Fazer cotação
                 </Link>
               </li>
               <li>
-                <Link href="/#planos" className="hover:text-[#9333EA]">
+                <Link href="/#planos" className="hover:text-[#A7115F]">
                   Planos
                 </Link>
               </li>
               <li>
-                <Link href="/fornecedores" className="hover:text-[#9333EA]">
+                <Link href="/fornecedores" className="hover:text-[#A7115F]">
                   Para Fornecedores
                 </Link>
               </li>
@@ -45,17 +45,17 @@ export function PublicFooter({
             <p className="font-semibold text-[#0A0A0A]">Acesso</p>
             <ul className="mt-3 space-y-2 text-[#6B7280]">
               <li>
-                <Link href="/acesse" className="hover:text-[#9333EA]">
+                <Link href="/acesse" className="hover:text-[#A7115F]">
                   Entrar
                 </Link>
               </li>
               <li>
-                <Link href="/cadastro" className="hover:text-[#9333EA]">
+                <Link href="/cadastro" className="hover:text-[#A7115F]">
                   Criar conta
                 </Link>
               </li>
               <li>
-                <a href={blogUrl} target="_blank" rel="noreferrer" className="hover:text-[#9333EA]">
+                <a href={blogUrl} target="_blank" rel="noreferrer" className="hover:text-[#A7115F]">
                   Blog
                 </a>
               </li>
@@ -69,7 +69,7 @@ export function PublicFooter({
                   href={whatsappUrl}
                   target="_blank"
                   rel="noreferrer"
-                  className="hover:text-[#9333EA]"
+                  className="hover:text-[#A7115F]"
                 >
                   WhatsApp
                 </a>

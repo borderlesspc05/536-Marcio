@@ -12,14 +12,14 @@ type WhatsAppCtaProps = {
 export function WhatsAppCta({
   whatsappUrl,
   title = "Fale com um Consultor",
-  description = "Chegou o momento de evoluir sua área de compras com uma solução que vai proporcionar segurança e controle. Estamos à disposição.",
+  description = "Ganhe segurança, agilidade e gestão. Mais que uma plataforma, somos a evolução que seu negócio precisa.",
 }: WhatsAppCtaProps) {
   return (
     <section id="especialista" className="pb-20 lg:pb-24">
       <Container>
-        <div className="overflow-hidden rounded-[32px] border border-black/5 bg-[#0B0B0F] px-6 py-10 sm:px-10 sm:py-12 lg:flex lg:items-center lg:justify-between lg:gap-10">
+        <div className="overflow-hidden rounded-2xl border border-[#A7115F]/20 bg-[#102A43] px-6 py-10 shadow-[0_24px_70px_-40px_rgba(16,42,67,0.8)] sm:px-10 sm:py-12 lg:flex lg:items-center lg:justify-between lg:gap-10">
           <div className="max-w-xl">
-            <p className="text-sm font-semibold uppercase tracking-wide text-[#D946EF]">
+            <p className="text-sm font-semibold uppercase tracking-wide text-[#F9A8D4]">
               Atendimento
             </p>
             <h2 className="mt-3 text-3xl font-extrabold tracking-tight text-white sm:text-4xl">
@@ -28,8 +28,8 @@ export function WhatsAppCta({
             <p className="mt-3 text-base text-white/65">{description}</p>
           </div>
           <Link href={whatsappUrl} target="_blank" rel="noreferrer" className="mt-8 inline-block lg:mt-0">
-            <Button size="lg" className="gap-2 bg-white text-[#0B0B0F] hover:bg-white/90">
-              <MessageCircle className="h-5 w-5 text-[#25D366]" />
+            <Button size="lg" className="gap-2 bg-[#A7115F] text-white hover:bg-[#8F0E52]">
+              <MessageCircle className="h-5 w-5" />
               Abrir WhatsApp
             </Button>
           </Link>

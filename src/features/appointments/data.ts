@@ -1,5 +1,5 @@
-import { MemberRole, OrganizationType } from "@prisma/client";
-import { prisma } from "@/lib/prisma";
+import { MemberRole, OrganizationType } from "@/lib/domain/types";
+import { firestoreDb } from "@/lib/firebase/firestore-db";
 import { getExternalApproverCondominiumIds } from "@/features/external-approver/guards";
 import { resolveDateRange, type AppointmentFilterInput } from "@/features/appointments/filters";
 
@@ -12,19 +12,19 @@ export async function listAccessibleCondominiums(input: {
 }) {
   if (input.role === MemberRole.external_approver) {
     const ids = await getExternalApproverCondominiumIds(input.userId, input.organizationId);
-    return prisma.condominium.findMany({
+    return firestoreDb.condominium.findMany({
       where: { id: { in: ids }, archivedAt: null },
       orderBy: { name: "asc" },
     });
   }
 
   if (input.organizationType === OrganizationType.master_service) {
-    const clients = await prisma.serviceClient.findMany({
+    const clients = await firestoreDb.serviceClient.findMany({
       where: { managedByOrgId: input.organizationId, isActive: true },
       select: { clientOrgId: true },
     });
     const orgIds = clients.map((client) => client.clientOrgId);
-    return prisma.condominium.findMany({
+    return firestoreDb.condominium.findMany({
       where: {
         organizationId: { in: orgIds },
         archivedAt: null,
@@ -36,7 +36,7 @@ export async function listAccessibleCondominiums(input: {
     });
   }
 
-  return prisma.condominium.findMany({
+  return firestoreDb.condominium.findMany({
     where: {
       organizationId: input.organizationId,
       archivedAt: null,
@@ -64,7 +64,7 @@ export async function listAppointments(input: {
 
   let organizationFilter: { organizationId?: string | { in: string[] } } = {};
   if (input.organizationType === OrganizationType.master_service) {
-    const clients = await prisma.serviceClient.findMany({
+    const clients = await firestoreDb.serviceClient.findMany({
       where: { managedByOrgId: input.organizationId, isActive: true },
       select: { clientOrgId: true },
     });
@@ -73,7 +73,7 @@ export async function listAppointments(input: {
     organizationFilter = { organizationId: input.organizationId };
   }
 
-  return prisma.serviceAppointment.findMany({
+  return firestoreDb.serviceAppointment.findMany({
     where: {
       ...organizationFilter,
       condominiumId: { in: condominiumIds },
@@ -112,7 +112,7 @@ export async function listAppointments(input: {
 }
 
 export async function getAppointmentDetail(id: string) {
-  return prisma.serviceAppointment.findUnique({
+  return firestoreDb.serviceAppointment.findUnique({
     where: { id },
     include: {
       condominium: true,

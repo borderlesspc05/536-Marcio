@@ -1,8 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { MemberRole, OrganizationType } from "@prisma/client";
-import { prisma } from "@/lib/prisma";
+import { MemberRole, OrganizationType } from "@/lib/domain/types";
+import { firestoreDb } from "@/lib/firebase/firestore-db";
 import { requireAuthorizedSession } from "@/lib/auth/guards";
 import { toPublicErrorMessage } from "@/lib/errors";
 import { writeAuditLog } from "@/lib/audit";
@@ -39,12 +39,12 @@ export async function toggleFavoriteSupplierAction(formData: FormData): Promise<
     const categoryId = String(formData.get("categoryId") || "") || null;
     if (!supplierOrgId) return { ok: false, message: "Fornecedor inválido." };
 
-    const supplier = await prisma.organization.findFirst({
+    const supplier = await firestoreDb.organization.findFirst({
       where: { id: supplierOrgId, type: "fornecedor" },
     });
     if (!supplier) return { ok: false, message: "Fornecedor não encontrado." };
 
-    const existing = await prisma.favoriteSupplier.findUnique({
+    const existing = await firestoreDb.favoriteSupplier.findUnique({
       where: {
         organizationId_supplierOrgId: {
           organizationId: gate.session.organizationId,
@@ -54,7 +54,7 @@ export async function toggleFavoriteSupplierAction(formData: FormData): Promise<
     });
 
     if (existing) {
-      await prisma.favoriteSupplier.delete({ where: { id: existing.id } });
+      await firestoreDb.favoriteSupplier.delete({ where: { id: existing.id } });
       await writeAuditLog({
         userId: gate.session.userId,
         action: "favorite.removed",
@@ -65,7 +65,7 @@ export async function toggleFavoriteSupplierAction(formData: FormData): Promise<
       return { ok: true, message: "Removido dos favoritos." };
     }
 
-    await prisma.favoriteSupplier.create({
+    await firestoreDb.favoriteSupplier.create({
       data: {
         organizationId: gate.session.organizationId,
         supplierOrgId,

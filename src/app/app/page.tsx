@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { MemberRole, OrganizationType } from "@prisma/client";
+import { MemberRole, OrganizationType } from "@/lib/domain/types";
 import { redirect } from "next/navigation";
 import { MessageCircle } from "lucide-react";
 import { getSession } from "@/lib/auth/session";

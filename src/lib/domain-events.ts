@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/prisma";
+import { firestoreDb } from "@/lib/firebase/firestore-db";
 import { createNotification, notifyOrgMembers } from "@/features/notifications/service";
 import { sendTemplatedEmail } from "@/features/notifications/email-provider";
 import { creditReferralOnPaidUpgrade } from "@/features/referrals/rewards";
@@ -20,7 +20,7 @@ function asNumber(value: unknown): number | undefined {
 }
 
 export async function emitDomainEvent(input: EmitInput) {
-  const event = await prisma.domainEvent.create({
+  const event = await firestoreDb.domainEvent.create({
     data: {
       type: input.type,
       entityType: input.entityType,
@@ -55,7 +55,7 @@ export async function dispatchDomainEvent(input: {
   switch (input.type) {
     case "proposal.submitted": {
       const quotation = quotationId
-        ? await prisma.quotation.findUnique({ where: { id: quotationId } })
+        ? await firestoreDb.quotation.findUnique({ where: { id: quotationId } })
         : null;
       const orgId = quotation?.organizationId ?? asString(payload.solicitanteOrgId);
       if (orgId) {
@@ -79,7 +79,7 @@ export async function dispatchDomainEvent(input: {
           href: hrefQuotation,
           metadata: payload,
         });
-        const members = await prisma.organizationMember.findMany({
+        const members = await firestoreDb.organizationMember.findMany({
           where: { organizationId: orgId },
           include: { user: true },
         });
@@ -130,7 +130,7 @@ export async function dispatchDomainEvent(input: {
           href: "/app/oportunidades",
           metadata: payload,
         });
-        const suppliers = await prisma.organizationMember.findMany({
+        const suppliers = await firestoreDb.organizationMember.findMany({
           where: { organizationId: supplierOrgId },
           include: { user: true },
         });
@@ -184,7 +184,7 @@ export async function dispatchDomainEvent(input: {
           href: "/app/oportunidades",
           metadata: payload,
         });
-        const members = await prisma.organizationMember.findMany({
+        const members = await firestoreDb.organizationMember.findMany({
           where: { organizationId: supplierOrgId },
           include: { user: true },
         });
@@ -211,7 +211,7 @@ export async function dispatchDomainEvent(input: {
           metadata: payload,
         });
       }
-      const masters = await prisma.organization.findMany({
+      const masters = await firestoreDb.organization.findMany({
         where: { type: "master_admin" },
         select: { id: true },
       });
@@ -252,7 +252,7 @@ export async function dispatchDomainEvent(input: {
     }
     case "service_quotation.external_approved": {
       if (!quotationId) break;
-      const quotation = await prisma.quotation.findUnique({
+      const quotation = await firestoreDb.quotation.findUnique({
         where: { id: quotationId },
         include: {
           condominium: true,
@@ -303,7 +303,7 @@ export async function dispatchDomainEvent(input: {
       });
 
       if (winning) {
-        const supplierMembers = await prisma.organizationMember.findMany({
+        const supplierMembers = await firestoreDb.organizationMember.findMany({
           where: { organizationId: winning.organizationId, role: "master" },
           include: { user: true },
         });
@@ -331,7 +331,7 @@ export async function dispatchDomainEvent(input: {
     }
     case "service_quotation.external_rejected": {
       if (!quotationId) break;
-      const quotation = await prisma.quotation.findUnique({
+      const quotation = await firestoreDb.quotation.findUnique({
         where: { id: quotationId },
       });
       if (!quotation?.requesterEmail) break;
@@ -358,7 +358,7 @@ export async function dispatchDomainEvent(input: {
 
 async function sendComplianceEmails(payload: Record<string, unknown>, orgId?: string | null) {
   if (!orgId) return;
-  const members = await prisma.organizationMember.findMany({
+  const members = await firestoreDb.organizationMember.findMany({
     where: { organizationId: orgId },
     include: { user: true },
   });

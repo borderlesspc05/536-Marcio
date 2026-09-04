@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/prisma";
+import { firestoreDb } from "@/lib/firebase/firestore-db";
 import { createNotification } from "@/features/notifications/service";
 import { sendTemplatedEmail } from "@/features/notifications/email-provider";
 
@@ -11,9 +11,9 @@ export async function creditReferralOnPaidUpgrade(input: {
   if (!input.organizationId) return null;
 
   const plan = input.planSlug
-    ? await prisma.plan.findUnique({ where: { slug: input.planSlug } })
+    ? await firestoreDb.plan.findUnique({ where: { slug: input.planSlug } })
     : (
-        await prisma.subscription.findFirst({
+        await firestoreDb.subscription.findFirst({
           where: { organizationId: input.organizationId, status: "active" },
           include: { plan: true },
           orderBy: { createdAt: "desc" },
@@ -22,7 +22,7 @@ export async function creditReferralOnPaidUpgrade(input: {
 
   if (!plan || plan.isFree) return null;
 
-  const members = await prisma.organizationMember.findMany({
+  const members = await firestoreDb.organizationMember.findMany({
     where: { organizationId: input.organizationId },
     include: { user: true },
   });
@@ -31,7 +31,7 @@ export async function creditReferralOnPaidUpgrade(input: {
   if (!referred?.referredByUserId) return null;
 
   const yearMonth = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}`;
-  const existing = await prisma.referralReward.findFirst({
+  const existing = await firestoreDb.referralReward.findFirst({
     where: {
       referrerUserId: referred.referredByUserId,
       referredUserId: referred.id,
@@ -41,7 +41,7 @@ export async function creditReferralOnPaidUpgrade(input: {
   });
   if (existing) return existing;
 
-  const reward = await prisma.referralReward.create({
+  const reward = await firestoreDb.referralReward.create({
     data: {
       referrerUserId: referred.referredByUserId,
       referredUserId: referred.id,
@@ -61,7 +61,7 @@ export async function creditReferralOnPaidUpgrade(input: {
     metadata: { rewardId: reward.id, planSlug: plan.slug },
   });
 
-  const referrer = await prisma.user.findUnique({ where: { id: referred.referredByUserId } });
+  const referrer = await firestoreDb.user.findUnique({ where: { id: referred.referredByUserId } });
   if (referrer) {
     await sendTemplatedEmail({
       toEmail: referrer.email,
@@ -78,12 +78,12 @@ export async function creditReferralOnPaidUpgrade(input: {
 export type ReferralStatus = "cadastrado_free" | "ativo_pago";
 
 export async function resolveReferralStatus(referredUserId: string): Promise<ReferralStatus> {
-  const memberships = await prisma.organizationMember.findMany({
+  const memberships = await firestoreDb.organizationMember.findMany({
     where: { userId: referredUserId },
     select: { organizationId: true },
   });
   for (const membership of memberships) {
-    const sub = await prisma.subscription.findFirst({
+    const sub = await firestoreDb.subscription.findFirst({
       where: { organizationId: membership.organizationId, status: "active" },
       include: { plan: true },
       orderBy: { createdAt: "desc" },

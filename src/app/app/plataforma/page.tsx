@@ -1,7 +1,7 @@
 import Link from "next/link";
-import { OrganizationType } from "@prisma/client";
+import { OrganizationType } from "@/lib/domain/types";
 import { requireAuthorizedSession } from "@/lib/auth/guards";
-import { prisma } from "@/lib/prisma";
+import { firestoreDb } from "@/lib/firebase/firestore-db";
 import { Button } from "@/components/ui/Button";
 import { togglePartnershipLockAction } from "@/features/partnerships/actions";
 import { reviewMigrationAction } from "@/features/migration/actions";
@@ -22,8 +22,8 @@ export default async function Page() {
   });
 
   const [settings, migrations, overrides, orgs, reports] = await Promise.all([
-    prisma.platformSettings.findUnique({ where: { id: "default" } }),
-    prisma.organizationMigration.findMany({
+    firestoreDb.platformSettings.findUnique({ where: { id: "default" } }),
+    firestoreDb.organizationMigration.findMany({
       where: { status: { in: ["pending_payment", "pending_review", "approved"] } },
       include: {
         targetPlan: true,
@@ -32,12 +32,12 @@ export default async function Page() {
       orderBy: { createdAt: "desc" },
       take: 10,
     }),
-    prisma.planOverride.findMany({
+    firestoreDb.planOverride.findMany({
       include: { organization: true },
       orderBy: { updatedAt: "desc" },
       take: 20,
     }),
-    prisma.organization.findMany({
+    firestoreDb.organization.findMany({
       where: { type: { in: ["sindico", "administradora", "fornecedor"] } },
       orderBy: { name: "asc" },
       take: 100,

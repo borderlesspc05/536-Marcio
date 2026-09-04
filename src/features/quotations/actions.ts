@@ -2,8 +2,8 @@
 
 import { randomBytes } from "crypto";
 import { revalidatePath } from "next/cache";
-import { OrganizationType } from "@prisma/client";
-import { prisma } from "@/lib/prisma";
+import { OrganizationType } from "@/lib/domain/types";
+import { firestoreDb } from "@/lib/firebase/firestore-db";
 import { requireAuthorizedSession } from "@/lib/auth/guards";
 import { AppError, toPublicErrorMessage } from "@/lib/errors";
 import { writeAuditLog } from "@/lib/audit";
@@ -58,17 +58,17 @@ export async function createQuotationAction(formData: FormData): Promise<ActionR
     }
 
     const [condominium, category, serviceItem] = await Promise.all([
-      prisma.condominium.findFirst({
+      firestoreDb.condominium.findFirst({
         where: {
           id: parsed.data.condominiumId,
           organizationId: session.organizationId,
           archivedAt: null,
         },
       }),
-      prisma.serviceCategory.findFirst({
+      firestoreDb.serviceCategory.findFirst({
         where: { id: parsed.data.categoryId, isActive: true, deletedAt: null },
       }),
-      prisma.serviceItem.findFirst({
+      firestoreDb.serviceItem.findFirst({
         where: {
           id: parsed.data.serviceItemId,
           categoryId: parsed.data.categoryId,
@@ -85,7 +85,7 @@ export async function createQuotationAction(formData: FormData): Promise<ActionR
 
     let publicId = generatePublicId();
     for (let attempt = 0; attempt < 5; attempt += 1) {
-      const exists = await prisma.quotation.findUnique({ where: { publicId } });
+      const exists = await firestoreDb.quotation.findUnique({ where: { publicId } });
       if (!exists) break;
       publicId = generatePublicId();
     }
@@ -123,7 +123,7 @@ export async function createQuotationAction(formData: FormData): Promise<ActionR
         quotationId: quotation.id,
         file,
       });
-      await prisma.quotationAttachment.create({
+      await firestoreDb.quotationAttachment.create({
         data: {
           quotationId: quotation.id,
           fileName: stored.fileName,

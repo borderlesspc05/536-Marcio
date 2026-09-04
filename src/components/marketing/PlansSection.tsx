@@ -18,6 +18,7 @@ export type PlanCard = {
   ctaHref?: string;
   hideQuota?: boolean;
   consultPrice?: boolean;
+  quotaLabel?: string;
 };
 
 type PlansSectionProps = {
@@ -37,8 +38,8 @@ export function PlansSection({ id = "planos", title, subtitle, plans, audience }
   return (
     <section id={id} className="py-20 lg:py-24">
       <Container>
-        <div className="mx-auto max-w-2xl text-center">
-          <p className="text-sm font-semibold uppercase tracking-wide text-[#9333EA]">Planos</p>
+        <div className="mx-auto max-w-3xl text-center">
+          <p className="text-sm font-semibold uppercase tracking-wide text-[#A7115F]">Planos</p>
           <h2 className="mt-3 text-3xl font-extrabold tracking-tight text-[#0A0A0A] sm:text-4xl">
             {title}
           </h2>
@@ -56,14 +57,14 @@ export function PlansSection({ id = "planos", title, subtitle, plans, audience }
             return (
               <article
                 key={plan.slug}
-                className={`relative flex flex-col rounded-[28px] border p-6 sm:p-7 ${
+                className={`group relative flex flex-col rounded-2xl border p-6 transition-[transform,box-shadow,border-color] duration-300 hover:-translate-y-1 sm:p-7 ${
                   plan.recommended
-                    ? "border-[#9333EA]/35 bg-gradient-to-br from-white via-white to-[#FDF4FF] shadow-[0_20px_50px_-24px_rgba(147,51,234,0.45)]"
-                    : "border-black/5 bg-white/80"
+                    ? "border-[#A7115F]/35 bg-gradient-to-br from-white via-white to-[#FFF1F7] shadow-[0_20px_50px_-24px_rgba(167,17,95,0.38)]"
+                    : "border-[#D9E2EC] bg-white/90 shadow-[0_16px_40px_-32px_rgba(16,42,67,0.7)] hover:border-[#A7115F]/20"
                 }`}
               >
                 {plan.recommended ? (
-                  <span className="absolute -top-3 left-6 rounded-full bg-[linear-gradient(135deg,#E11D8A,#9333EA)] px-3 py-1 text-[11px] font-semibold text-white">
+                  <span className="absolute -top-3 left-6 rounded-full bg-[#A7115F] px-3 py-1 text-[11px] font-semibold text-white">
                     Recomendado
                   </span>
                 ) : null}
@@ -91,8 +92,13 @@ export function PlansSection({ id = "planos", title, subtitle, plans, audience }
                       : `${plan.monthlyQuota} cotações/mês`}
                   </p>
                 ) : (
-                  <p className="mt-2 text-xs text-[#6B7280]">Negócio sob relacionamento</p>
+                  <p className="mt-2 text-xs font-semibold text-[#526D82]">
+                    {plan.quotaLabel ?? "Negócio sob relacionamento"}
+                  </p>
                 )}
+                <p className="mt-5 rounded-xl bg-[#FFF1F7] px-3 py-2 text-center text-xs font-bold text-[#8F0E52]">
+                  Sua indicação vale cashback
+                </p>
                 <ul className="mt-6 flex-1 space-y-2.5">
                   {plan.features.map((feature) => (
                     <li key={feature} className="flex items-start gap-2 text-sm text-[#171717]">

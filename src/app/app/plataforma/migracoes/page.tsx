@@ -1,6 +1,6 @@
-import { OrganizationType } from "@prisma/client";
+import { OrganizationType } from "@/lib/domain/types";
 import { requireAuthorizedSession } from "@/lib/auth/guards";
-import { prisma } from "@/lib/prisma";
+import { firestoreDb } from "@/lib/firebase/firestore-db";
 import { reviewMigrationAction } from "@/features/migration/actions";
 import { formAction } from "@/lib/form-action";
 import { Button } from "@/components/ui/Button";
@@ -11,7 +11,7 @@ export default async function MigracoesAdminPage() {
     href: "/app/plataforma/migracoes",
   });
 
-  const migrations = await prisma.organizationMigration.findMany({
+  const migrations = await firestoreDb.organizationMigration.findMany({
     include: { targetPlan: true, organization: true },
     orderBy: { createdAt: "desc" },
   });

@@ -1,9 +1,9 @@
 import Link from "next/link";
 import { requireAuthorizedSession } from "@/lib/auth/guards";
-import { prisma } from "@/lib/prisma";
+import { firestoreDb } from "@/lib/firebase/firestore-db";
 import { getFranchiseBalance } from "@/features/quotations/franchise";
 import { Button } from "@/components/ui/Button";
-import type { QuotationStatus } from "@prisma/client";
+import type { QuotationStatus } from "@/lib/domain/types";
 
 type PageProps = {
   searchParams: Promise<{
@@ -29,12 +29,12 @@ export default async function CotacoesPage({ searchParams }: PageProps) {
   };
 
   const [categories, quotations] = await Promise.all([
-    prisma.serviceCategory.findMany({
+    firestoreDb.serviceCategory.findMany({
       where: { deletedAt: null, isActive: true },
       orderBy: { sortOrder: "asc" },
       select: { id: true, name: true },
     }),
-    prisma.quotation.findMany({
+    firestoreDb.quotation.findMany({
       where: {
         organizationId: session.organizationId,
         ...(filters.status === "recusada"

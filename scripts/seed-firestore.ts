@@ -2,18 +2,16 @@ import {
   MemberRole,
   OrganizationType,
   PlanAudience,
-  PrismaClient,
-} from "@prisma/client";
+} from "../src/lib/domain/types";
 import bcrypt from "bcryptjs";
-
-const prisma = new PrismaClient();
+import { firestoreDb } from "../src/lib/firebase/firestore-db";
 
 async function upsertUser(input: {
   email: string;
   name: string;
   passwordHash: string;
 }) {
-  return prisma.user.upsert({
+  return firestoreDb.user.upsert({
     where: { email: input.email },
     update: {
       name: input.name,
@@ -36,7 +34,7 @@ async function ensureOrgMembership(input: {
   organizationId: string;
   role: MemberRole;
 }) {
-  await prisma.organizationMember.upsert({
+  await firestoreDb.organizationMember.upsert({
     where: {
       userId_organizationId: {
         userId: input.userId,
@@ -53,19 +51,19 @@ async function ensureOrgMembership(input: {
 }
 
 async function ensureActiveSubscription(organizationId: string, planSlug: string) {
-  const plan = await prisma.plan.findUniqueOrThrow({ where: { slug: planSlug } });
-  const existing = await prisma.subscription.findFirst({
+  const plan = await firestoreDb.plan.findUniqueOrThrow({ where: { slug: planSlug } });
+  const existing = await firestoreDb.subscription.findFirst({
     where: { organizationId, status: "active" },
   });
   if (!existing) {
-    await prisma.subscription.create({
+    await firestoreDb.subscription.create({
       data: { organizationId, planId: plan.id, status: "active" },
     });
   }
 }
 
 async function main() {
-  await prisma.platformSettings.upsert({
+  await firestoreDb.platformSettings.upsert({
     where: { id: "default" },
     update: {
       freeQuotaSolicitante: 15,
@@ -88,7 +86,7 @@ async function main() {
     },
   });
 
-  await prisma.marketingSettings.upsert({
+  await firestoreDb.marketingSettings.upsert({
     where: { id: "default" },
     update: {
       whatsappUrl: process.env.NEXT_PUBLIC_WHATSAPP_URL ?? "https://wa.me/5500000000000",
@@ -144,7 +142,7 @@ async function main() {
   ];
 
   for (const banner of banners) {
-    await prisma.landingBanner.upsert({
+    await firestoreDb.landingBanner.upsert({
       where: { id: banner.id },
       update: banner,
       create: banner,
@@ -309,7 +307,7 @@ async function main() {
   ];
 
   for (const plan of plans) {
-    await prisma.plan.upsert({
+    await firestoreDb.plan.upsert({
       where: { slug: plan.slug },
       update: plan,
       create: plan,
@@ -318,7 +316,7 @@ async function main() {
 
   const passwordHash = await bcrypt.hash("123456", 12);
 
-  const platformOrg = await prisma.organization.upsert({
+  const platformOrg = await firestoreDb.organization.upsert({
     where: { id: "org_platform_master" },
     update: { name: "CotaCondo Plataforma", type: OrganizationType.master_admin },
     create: {
@@ -328,7 +326,7 @@ async function main() {
     },
   });
 
-  const sindicoOrg = await prisma.organization.upsert({
+  const sindicoOrg = await firestoreDb.organization.upsert({
     where: { id: "org_demo_sindico" },
     update: { name: "Condomínio Demo Sol", type: OrganizationType.sindico },
     create: {
@@ -338,7 +336,7 @@ async function main() {
     },
   });
 
-  const fornecedorOrg = await prisma.organization.upsert({
+  const fornecedorOrg = await firestoreDb.organization.upsert({
     where: { id: "org_demo_fornecedor" },
     update: { name: "Serviços Prediais Demo LTDA", type: OrganizationType.fornecedor },
     create: {
@@ -348,7 +346,7 @@ async function main() {
     },
   });
 
-  const admOrg = await prisma.organization.upsert({
+  const admOrg = await firestoreDb.organization.upsert({
     where: { id: "org_demo_adm" },
     update: { name: "Administradora Premium Demo", type: OrganizationType.administradora },
     create: {
@@ -358,7 +356,7 @@ async function main() {
     },
   });
 
-  const masterServiceOrg = await prisma.organization.upsert({
+  const masterServiceOrg = await firestoreDb.organization.upsert({
     where: { id: "org_master_service" },
     update: { name: "CotaCondo Master Service", type: OrganizationType.master_service },
     create: {
@@ -426,11 +424,11 @@ async function main() {
     });
     await ensureActiveSubscription(demo.organizationId, demo.planSlug);
 
-    const existingConsent = await prisma.consentRecord.findFirst({
+    const existingConsent = await firestoreDb.consentRecord.findFirst({
       where: { userId: user.id, type: "privacy_policy" },
     });
     if (!existingConsent) {
-      await prisma.consentRecord.create({
+      await firestoreDb.consentRecord.create({
         data: {
           userId: user.id,
           type: "privacy_policy",
@@ -444,16 +442,16 @@ async function main() {
   const catalog = await seedOfficialCatalog();
   console.log(`Catálogo seed: ${catalog.categoryCount} categorias / ${catalog.itemCount} serviços`);
 
-  const segurosCategory = await prisma.serviceCategory.findUnique({
+  const segurosCategory = await firestoreDb.serviceCategory.findUnique({
     where: { slug: "seguros" },
     include: { items: { where: { deletedAt: null }, orderBy: { sortOrder: "asc" }, take: 1 } },
   });
   const segurosSegment = segurosCategory?.items[0];
   if (segurosCategory && segurosSegment) {
-    await prisma.organizationCategory.deleteMany({
+    await firestoreDb.organizationCategory.deleteMany({
       where: { organizationId: fornecedorOrg.id, categoryId: segurosCategory.id },
     });
-    await prisma.organizationCategory.create({
+    await firestoreDb.organizationCategory.create({
       data: {
         organizationId: fornecedorOrg.id,
         categoryId: segurosCategory.id,
@@ -466,7 +464,7 @@ async function main() {
   }
 
   // Fornecedores extras para o motor de distribuição (Dia 4)
-  const fornecedorPro = await prisma.organization.upsert({
+  const fornecedorPro = await firestoreDb.organization.upsert({
     where: { id: "org_demo_fornecedor_pro" },
     update: { name: "Seguros Pro Compliant LTDA", type: OrganizationType.fornecedor },
     create: {
@@ -476,7 +474,7 @@ async function main() {
       document: "12345678000199",
     },
   });
-  const fornecedorPending = await prisma.organization.upsert({
+  const fornecedorPending = await firestoreDb.organization.upsert({
     where: { id: "org_demo_fornecedor_pending" },
     update: { name: "Seguros Pending Docs LTDA", type: OrganizationType.fornecedor },
     create: {
@@ -492,10 +490,10 @@ async function main() {
 
   if (segurosCategory && segurosSegment) {
     for (const orgId of [fornecedorPro.id, fornecedorPending.id]) {
-      await prisma.organizationCategory.deleteMany({
+      await firestoreDb.organizationCategory.deleteMany({
         where: { organizationId: orgId, categoryId: segurosCategory.id },
       });
-      await prisma.organizationCategory.create({
+      await firestoreDb.organizationCategory.create({
         data: {
           organizationId: orgId,
           categoryId: segurosCategory.id,
@@ -505,10 +503,10 @@ async function main() {
       });
     }
 
-    await prisma.complianceDocument.deleteMany({
+    await firestoreDb.complianceDocument.deleteMany({
       where: { organizationId: { in: [fornecedorPro.id, fornecedorPending.id] } },
     });
-    await prisma.complianceDocument.create({
+    await firestoreDb.complianceDocument.create({
       data: {
         organizationId: fornecedorPro.id,
         documentType: "Certidão Negativa Federal",
@@ -518,7 +516,7 @@ async function main() {
         status: "aprovado",
       },
     });
-    await prisma.complianceDocument.create({
+    await firestoreDb.complianceDocument.create({
       data: {
         organizationId: fornecedorPending.id,
         documentType: "Certidão Negativa Federal",
@@ -529,7 +527,7 @@ async function main() {
       },
     });
 
-    await prisma.favoriteSupplier.upsert({
+    await firestoreDb.favoriteSupplier.upsert({
       where: {
         organizationId_supplierOrgId: {
           organizationId: admOrg.id,
@@ -545,7 +543,7 @@ async function main() {
     });
   }
 
-  const condo = await prisma.condominium.upsert({
+  const condo = await firestoreDb.condominium.upsert({
     where: { id: "condo_demo_sol" },
     update: {
       name: "Residencial Sol Demo",
@@ -565,14 +563,14 @@ async function main() {
   });
 
   const serviceItem = segurosCategory
-    ? await prisma.serviceItem.findFirst({
+    ? await firestoreDb.serviceItem.findFirst({
         where: { categoryId: segurosCategory.id, deletedAt: null, isActive: true },
         orderBy: { sortOrder: "asc" },
       })
     : null;
 
   if (segurosCategory && serviceItem) {
-    const quotation = await prisma.quotation.upsert({
+    const quotation = await firestoreDb.quotation.upsert({
       where: { publicId: "COT-DEMO-000001" },
       update: {
         description: "Cotação demo para oportunidades do fornecedor (Dia 3).",
@@ -590,14 +588,14 @@ async function main() {
         maxProposals: 10,
         status: "aberta",
         createdByUserId: (
-          await prisma.user.findUniqueOrThrow({
+          await firestoreDb.user.findUniqueOrThrow({
             where: { email: "sindico@demo.cotacondo.com.br" },
           })
         ).id,
       },
     });
 
-    await prisma.quotationInvite.upsert({
+    await firestoreDb.quotationInvite.upsert({
       where: {
         quotationId_supplierOrgId: {
           quotationId: quotation.id,
@@ -612,7 +610,7 @@ async function main() {
       },
     });
 
-    const quotation2 = await prisma.quotation.upsert({
+    const quotation2 = await firestoreDb.quotation.upsert({
       where: { publicId: "COT-DEMO-000002" },
       update: {
         description: "Segunda oportunidade demo (Kanban).",
@@ -630,14 +628,14 @@ async function main() {
         maxProposals: 8,
         status: "aberta",
         createdByUserId: (
-          await prisma.user.findUniqueOrThrow({
+          await firestoreDb.user.findUniqueOrThrow({
             where: { email: "sindico@demo.cotacondo.com.br" },
           })
         ).id,
       },
     });
 
-    await prisma.quotationInvite.upsert({
+    await firestoreDb.quotationInvite.upsert({
       where: {
         quotationId_supplierOrgId: {
           quotationId: quotation2.id,
@@ -653,7 +651,7 @@ async function main() {
     });
   }
 
-  const serviceClient = await prisma.serviceClient.upsert({
+  const serviceClient = await firestoreDb.serviceClient.upsert({
     where: { clientOrgId: admOrg.id },
     update: {
       managedByOrgId: masterServiceOrg.id,
@@ -680,7 +678,7 @@ async function main() {
     },
   });
 
-  await prisma.serviceClientManager.upsert({
+  await firestoreDb.serviceClientManager.upsert({
     where: {
       serviceClientId_email: {
         serviceClientId: serviceClient.id,
@@ -691,7 +689,7 @@ async function main() {
       name: "Adm Master Demo",
       roleLabel: "gerente",
       userId: (
-        await prisma.user.findUniqueOrThrow({
+        await firestoreDb.user.findUniqueOrThrow({
           where: { email: "adm.master@demo.cotacondo.com.br" },
         })
       ).id,
@@ -699,7 +697,7 @@ async function main() {
     create: {
       serviceClientId: serviceClient.id,
       userId: (
-        await prisma.user.findUniqueOrThrow({
+        await firestoreDb.user.findUniqueOrThrow({
           where: { email: "adm.master@demo.cotacondo.com.br" },
         })
       ).id,
@@ -709,7 +707,7 @@ async function main() {
     },
   });
 
-  const admCondo = await prisma.condominium.upsert({
+  const admCondo = await firestoreDb.condominium.upsert({
     where: { id: "condo_demo_adm_service" },
     update: {
       name: "Residencial Aurora Service",
@@ -730,11 +728,11 @@ async function main() {
   });
 
   if (segurosCategory && serviceItem) {
-    const serviceMasterUser = await prisma.user.findUniqueOrThrow({
+    const serviceMasterUser = await firestoreDb.user.findUniqueOrThrow({
       where: { email: "masterservice@demo.cotacondo.com.br" },
     });
 
-    const serviceQuotation = await prisma.quotation.upsert({
+    const serviceQuotation = await firestoreDb.quotation.upsert({
       where: { publicId: "COT-SERVICE-000001" },
       update: {
         description: "Cotação Cota Service demo — aguardando liberação do Master Service.",
@@ -770,7 +768,7 @@ async function main() {
       },
     });
 
-    await prisma.quotationInvite.upsert({
+    await firestoreDb.quotationInvite.upsert({
       where: {
         quotationId_supplierOrgId: {
           quotationId: serviceQuotation.id,
@@ -797,7 +795,7 @@ async function main() {
       organizationId: admOrg.id,
       role: MemberRole.external_approver,
     });
-    await prisma.externalApproverScope.upsert({
+    await firestoreDb.externalApproverScope.upsert({
       where: {
         userId_condominiumId: {
           userId: approverUser.id,
@@ -816,7 +814,7 @@ async function main() {
       },
     });
 
-    const pendingApprovalQuotation = await prisma.quotation.upsert({
+    const pendingApprovalQuotation = await firestoreDb.quotation.upsert({
       where: { publicId: "COT-SERVICE-000002" },
       update: {
         servicePipelineStatus: "em_analise",
@@ -847,7 +845,7 @@ async function main() {
       },
     });
 
-    const winningInvite = await prisma.quotationInvite.upsert({
+    const winningInvite = await firestoreDb.quotationInvite.upsert({
       where: {
         quotationId_supplierOrgId: {
           quotationId: pendingApprovalQuotation.id,
@@ -863,7 +861,7 @@ async function main() {
       },
     });
 
-    const winningProposal = await prisma.proposal.upsert({
+    const winningProposal = await firestoreDb.proposal.upsert({
       where: { inviteId: winningInvite.id },
       update: { status: "em_negociacao" },
       create: {
@@ -872,15 +870,15 @@ async function main() {
         quotationId: pendingApprovalQuotation.id,
         status: "em_negociacao",
         createdByUserId: (
-          await prisma.user.findUniqueOrThrow({
+          await firestoreDb.user.findUniqueOrThrow({
             where: { email: "fornecedor@demo.cotacondo.com.br" },
           })
         ).id,
       },
     });
 
-    await prisma.proposalCondition.deleteMany({ where: { proposalId: winningProposal.id } });
-    await prisma.proposalCondition.create({
+    await firestoreDb.proposalCondition.deleteMany({ where: { proposalId: winningProposal.id } });
+    await firestoreDb.proposalCondition.create({
       data: {
         proposalId: winningProposal.id,
         amountCents: 1890000,
@@ -888,13 +886,13 @@ async function main() {
       },
     });
 
-    await prisma.quotation.update({
+    await firestoreDb.quotation.update({
       where: { id: pendingApprovalQuotation.id },
       data: { approvedProposalId: winningProposal.id, proposalsCount: 1 },
     });
 
-    await prisma.rifAnalysis.deleteMany({ where: { quotationId: pendingApprovalQuotation.id } });
-    await prisma.rifAnalysis.create({
+    await firestoreDb.rifAnalysis.deleteMany({ where: { quotationId: pendingApprovalQuotation.id } });
+    await firestoreDb.rifAnalysis.create({
       data: {
         quotationId: pendingApprovalQuotation.id,
         generatedByUserId: serviceMasterUser.id,
@@ -917,7 +915,7 @@ async function main() {
 
     const nextAppointment = new Date();
     nextAppointment.setMonth(nextAppointment.getMonth() + 4);
-    await prisma.serviceAppointment.upsert({
+    await firestoreDb.serviceAppointment.upsert({
       where: { id: "appointment_demo_adm" },
       update: {
         appointmentDate: nextAppointment,
@@ -938,7 +936,7 @@ async function main() {
         leadMode: "days_30",
         source: "manual",
         createdByUserId: (
-          await prisma.user.findUniqueOrThrow({
+          await firestoreDb.user.findUniqueOrThrow({
             where: { email: "adm.master@demo.cotacondo.com.br" },
           })
         ).id,
@@ -961,5 +959,5 @@ main()
     process.exit(1);
   })
   .finally(async () => {
-    await prisma.$disconnect();
+    await firestoreDb.$disconnect();
   });

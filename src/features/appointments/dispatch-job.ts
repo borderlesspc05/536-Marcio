@@ -1,5 +1,5 @@
-import { prisma } from "@/lib/prisma";
-import { AppointmentLeadMode } from "@prisma/client";
+import { firestoreDb } from "@/lib/firebase/firestore-db";
+import { AppointmentLeadMode } from "@/lib/domain/types";
 
 const LEAD_DAYS: Record<Exclude<AppointmentLeadMode, "exact_date">, number> = {
   days_15: 15,
@@ -31,7 +31,7 @@ export async function runAppointmentDispatchJob() {
   const end = new Date(start);
   end.setHours(23, 59, 59, 999);
 
-  const appointments = await prisma.serviceAppointment.findMany({
+  const appointments = await firestoreDb.serviceAppointment.findMany({
     where: { lastDispatchedAt: null },
     include: {
       condominium: true,
@@ -53,14 +53,14 @@ export async function runAppointmentDispatchJob() {
     if (dispatchDate < start || dispatchDate > end) continue;
 
     const dedupeKey = `appointment_dispatch:${appointment.id}`;
-    const existing = await prisma.reminderDispatch.findUnique({ where: { dedupeKey } });
+    const existing = await firestoreDb.reminderDispatch.findUnique({ where: { dedupeKey } });
     if (existing) continue;
 
     const requesterEmail =
       appointment.condominium.contactEmail ??
       appointment.organization.name;
 
-    await prisma.emailOutbox.create({
+    await firestoreDb.emailOutbox.create({
       data: {
         toEmail: requesterEmail.includes("@") ? requesterEmail : "operacional@cotacondo.local",
         subject: `Disparo automático — ${appointment.category.name} · ${appointment.condominium.name}`,
@@ -76,7 +76,7 @@ export async function runAppointmentDispatchJob() {
       },
     });
 
-    await prisma.reminderDispatch.create({
+    await firestoreDb.reminderDispatch.create({
       data: {
         dedupeKey,
         kind: "appointment_dispatch",
@@ -84,7 +84,7 @@ export async function runAppointmentDispatchJob() {
       },
     });
 
-    await prisma.serviceAppointment.update({
+    await firestoreDb.serviceAppointment.update({
       where: { id: appointment.id },
       data: { lastDispatchedAt: new Date() },
     });

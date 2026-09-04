@@ -1,6 +1,6 @@
-import { OrganizationType } from "@prisma/client";
+import { OrganizationType } from "@/lib/domain/types";
 import { requireAuthorizedSession } from "@/lib/auth/guards";
-import { prisma } from "@/lib/prisma";
+import { firestoreDb } from "@/lib/firebase/firestore-db";
 import { markOverdueCompliance } from "@/features/compliance/expire";
 import { reviewComplianceDocumentAction } from "@/features/compliance/actions";
 import { Button } from "@/components/ui/Button";
@@ -13,7 +13,7 @@ export default async function PlataformaCompliancePage() {
 
   await markOverdueCompliance();
 
-  const queue = await prisma.complianceDocument.findMany({
+  const queue = await firestoreDb.complianceDocument.findMany({
     where: { status: { in: ["em_analise", "em_atraso"] } },
     orderBy: { createdAt: "asc" },
     include: {

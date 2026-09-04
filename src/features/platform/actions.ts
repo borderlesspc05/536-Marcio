@@ -1,9 +1,9 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { OrganizationType } from "@prisma/client";
+import { OrganizationType } from "@/lib/domain/types";
 import { z } from "zod";
-import { prisma } from "@/lib/prisma";
+import { firestoreDb } from "@/lib/firebase/firestore-db";
 import { requireAuthorizedSession } from "@/lib/auth/guards";
 import { toPublicErrorMessage } from "@/lib/errors";
 import { writeAuditLog } from "@/lib/audit";
@@ -47,7 +47,7 @@ export async function updatePlatformSettingsAction(formData: FormData): Promise<
       return { ok: false, message: parsed.error.issues[0]?.message ?? "Dados inválidos" };
     }
 
-    await prisma.platformSettings.upsert({
+    await firestoreDb.platformSettings.upsert({
       where: { id: "default" },
       create: {
         id: "default",
@@ -124,7 +124,7 @@ export async function upsertPlanOverrideAction(formData: FormData): Promise<Acti
       features.allowExtraCategoriesFree = true;
     }
 
-    await prisma.planOverride.upsert({
+    await firestoreDb.planOverride.upsert({
       where: { organizationId },
       create: {
         organizationId,
@@ -162,7 +162,7 @@ export async function deletePlanOverrideAction(formData: FormData): Promise<Acti
     });
     const organizationId = String(formData.get("organizationId") ?? "");
     if (!organizationId) return { ok: false, message: "Org inválida." };
-    await prisma.planOverride.delete({ where: { organizationId } }).catch(() => null);
+    await firestoreDb.planOverride.delete({ where: { organizationId } }).catch(() => null);
     revalidatePath("/app/plataforma");
     return { ok: true, message: "Override removido." };
   } catch (error) {

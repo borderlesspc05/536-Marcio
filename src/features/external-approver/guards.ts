@@ -1,7 +1,7 @@
-import { MemberRole } from "@prisma/client";
+import { MemberRole } from "@/lib/domain/types";
 import { redirect } from "next/navigation";
 import { requireAuthorizedSession } from "@/lib/auth/guards";
-import { prisma } from "@/lib/prisma";
+import { firestoreDb } from "@/lib/firebase/firestore-db";
 
 export async function requireExternalApprover() {
   const session = await requireAuthorizedSession({
@@ -11,7 +11,7 @@ export async function requireExternalApprover() {
 }
 
 export async function getExternalApproverCondominiumIds(userId: string, organizationId: string) {
-  const scopes = await prisma.externalApproverScope.findMany({
+  const scopes = await firestoreDb.externalApproverScope.findMany({
     where: { userId, organizationId },
     select: { condominiumId: true },
   });
@@ -28,7 +28,7 @@ export async function getExternalApproverQuotationOrThrow(
     throw new Error("Sem condomínios vinculados.");
   }
 
-  const quotation = await prisma.quotation.findFirst({
+  const quotation = await firestoreDb.quotation.findFirst({
     where: {
       id: quotationId,
       organizationId,

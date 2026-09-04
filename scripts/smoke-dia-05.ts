@@ -1,4 +1,4 @@
-import { prisma } from "../src/lib/prisma";
+import { firestoreDb } from "../src/lib/firebase/firestore-db";
 import { can, getPlanGate } from "../src/features/billing/plan-gate";
 import {
   createPlanCheckout,
@@ -9,22 +9,22 @@ import { FREE_PARTNERSHIP_MESSAGE } from "../src/features/partnerships/messages"
 import { recordCommissionFromApproval } from "../src/features/commissions/actions";
 
 async function main() {
-  const plans = await prisma.plan.findMany({ where: { isActive: true } });
+  const plans = await firestoreDb.plan.findMany({ where: { isActive: true } });
   if (plans.length < 8) throw new Error(`Esperado ≥8 planos, got ${plans.length}`);
   const admPago = plans.find((p) => p.slug === "adm-pago");
   if (!admPago) throw new Error("Plano adm-pago ausente");
   console.log(`Catálogo OK: ${plans.length} planos`);
 
-  const sindico = await prisma.organization.findFirst({ where: { type: "sindico" } });
-  const sindicoUser = await prisma.user.findFirst({
+  const sindico = await firestoreDb.organization.findFirst({ where: { type: "sindico" } });
+  const sindicoUser = await firestoreDb.user.findFirst({
     where: { email: "sindico@demo.cotacondo.com.br" },
   });
-  const adm = await prisma.organization.findFirst({ where: { type: "administradora" } });
-  const admUser = await prisma.user.findFirst({
+  const adm = await firestoreDb.organization.findFirst({ where: { type: "administradora" } });
+  const admUser = await firestoreDb.user.findFirst({
     where: { email: "adm.master@demo.cotacondo.com.br" },
   });
-  const fornecedor = await prisma.organization.findFirst({ where: { type: "fornecedor" } });
-  const fornecedorPro = await prisma.organization.findFirst({
+  const fornecedor = await firestoreDb.organization.findFirst({ where: { type: "fornecedor" } });
+  const fornecedorPro = await firestoreDb.organization.findFirst({
     where: { id: "org_demo_fornecedor_pro" },
   });
   if (!sindico || !sindicoUser || !adm || !admUser || !fornecedor) {
@@ -47,10 +47,10 @@ async function main() {
   console.log("Migração Free bloqueada OK");
 
   // Checkout upgrade sandbox
-  const sindicoFree = await prisma.plan.findUniqueOrThrow({
+  const sindicoFree = await firestoreDb.plan.findUniqueOrThrow({
     where: { slug: "sindico-free" },
   });
-  await prisma.subscription.updateMany({
+  await firestoreDb.subscription.updateMany({
     where: { organizationId: sindico.id, status: { in: ["active", "past_due"] } },
     data: {
       planId: sindicoFree.id,
@@ -101,15 +101,15 @@ async function main() {
   console.log("Plano incompatível com perfil bloqueado OK");
 
   // Parceria trava Free
-  const settings = await prisma.platformSettings.findUniqueOrThrow({ where: { id: "default" } });
+  const settings = await firestoreDb.platformSettings.findUniqueOrThrow({ where: { id: "default" } });
   if (!settings.partnershipLockEnabled) {
-    await prisma.platformSettings.update({
+    await firestoreDb.platformSettings.update({
       where: { id: "default" },
       data: { partnershipLockEnabled: true },
     });
   }
 
-  const freePlan = await prisma.plan.findUniqueOrThrow({ where: { slug: "fornecedor-free" } });
+  const freePlan = await firestoreDb.plan.findUniqueOrThrow({ where: { slug: "fornecedor-free" } });
   let features: { partnershipEligible?: boolean } = {};
   try {
     features = JSON.parse(freePlan.featuresJson) as { partnershipEligible?: boolean };
@@ -121,7 +121,7 @@ async function main() {
 
   // Parceria com Pro
   if (fornecedorPro) {
-    await prisma.partnership.upsert({
+    await firestoreDb.partnership.upsert({
       where: {
         administradoraOrgId_supplierOrgId: {
           administradoraOrgId: adm.id,
@@ -142,7 +142,7 @@ async function main() {
   const admGate = await getPlanGate(adm.id);
   if (!can(admGate, "commissions")) throw new Error("Adm Premium deveria ter commissions");
 
-  const agreement = await prisma.commissionAgreement.create({
+  const agreement = await firestoreDb.commissionAgreement.create({
     data: {
       administradoraOrgId: adm.id,
       supplierOrgId: fornecedor.id,
@@ -167,17 +167,17 @@ async function main() {
   console.log("Ledger comissão OK:", entry.commissionCents);
 
   // Addon categorias (fornecedor pago)
-  const proOrg = await prisma.organization.findUnique({
+  const proOrg = await firestoreDb.organization.findUnique({
     where: { id: "org_demo_fornecedor_pro" },
   });
   if (!proOrg) throw new Error("org_demo_fornecedor_pro ausente");
 
-  const existingCats = await prisma.organizationCategory.findMany({
+  const existingCats = await firestoreDb.organizationCategory.findMany({
     where: { organizationId: proOrg.id },
     select: { categoryId: true },
   });
   const existingIds = new Set(existingCats.map((c) => c.categoryId));
-  const addonCategory = await prisma.serviceCategory.findFirst({
+  const addonCategory = await firestoreDb.serviceCategory.findFirst({
     where: { deletedAt: null, isActive: true, id: { notIn: [...existingIds] } },
   });
   if (!addonCategory) throw new Error("Sem categoria disponível para addon");
@@ -189,7 +189,7 @@ async function main() {
     categoryIds: [addonCategory.id],
   });
   await fulfillCheckoutPaid(addon.checkoutId, admUser.id);
-  const link = await prisma.organizationCategory.findFirst({
+  const link = await firestoreDb.organizationCategory.findFirst({
     where: { organizationId: proOrg.id, categoryId: addonCategory.id, isAddon: true },
   });
   if (!link) throw new Error("Addon de categoria não persistiu");
@@ -201,7 +201,7 @@ async function main() {
   }
   console.log("PlanGate Premium OK");
 
-  await prisma.commissionAgreement.delete({ where: { id: agreement.id } }).catch(() => undefined);
+  await firestoreDb.commissionAgreement.delete({ where: { id: agreement.id } }).catch(() => undefined);
 
   console.log("SMOKE DIA 5 OK");
 }
@@ -212,5 +212,5 @@ main()
     process.exit(1);
   })
   .finally(async () => {
-    await prisma.$disconnect();
+    await firestoreDb.$disconnect();
   });

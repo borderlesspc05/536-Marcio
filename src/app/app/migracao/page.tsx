@@ -1,6 +1,6 @@
-import { OrganizationType } from "@prisma/client";
+import { OrganizationType } from "@/lib/domain/types";
 import { requireAuthorizedSession } from "@/lib/auth/guards";
-import { prisma } from "@/lib/prisma";
+import { firestoreDb } from "@/lib/firebase/firestore-db";
 import { MigrationForm } from "@/features/migration/components/MigrationForm";
 
 export default async function MigracaoPage() {
@@ -10,14 +10,14 @@ export default async function MigracaoPage() {
   });
 
   const [plans, history] = await Promise.all([
-    prisma.plan.findMany({
+    firestoreDb.plan.findMany({
       where: {
         isActive: true,
         slug: { in: ["adm-free", "adm-pago", "adm-premium"] },
       },
       orderBy: { sortOrder: "asc" },
     }),
-    prisma.organizationMigration.findMany({
+    firestoreDb.organizationMigration.findMany({
       where: { organizationId: session.organizationId },
       include: { targetPlan: true },
       orderBy: { createdAt: "desc" },

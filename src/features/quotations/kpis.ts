@@ -1,7 +1,7 @@
-import { prisma } from "@/lib/prisma";
+import { firestoreDb } from "@/lib/firebase/firestore-db";
 import { getFranchiseBalance } from "@/features/quotations/franchise";
 import { getSupplierFranchiseBalance } from "@/features/supplier/franchise";
-import type { OrganizationType } from "@prisma/client";
+import type { OrganizationType } from "@/lib/domain/types";
 
 export type DashboardKpis = {
   openQuotations: number;
@@ -41,29 +41,29 @@ export async function getDashboardKpis(input: {
 
   const [openQuotations, inNegotiation, approved, rejected, proposalsReceived] =
     await Promise.all([
-      prisma.quotation.count({
+      firestoreDb.quotation.count({
         where: { organizationId: input.organizationId, status: "aberta" },
       }),
-      prisma.quotation.count({
+      firestoreDb.quotation.count({
         where: { organizationId: input.organizationId, status: "em_negociacao" },
       }),
-      prisma.quotation.count({
+      firestoreDb.quotation.count({
         where: { organizationId: input.organizationId, status: "aprovada" },
       }),
-      prisma.quotation.count({
+      firestoreDb.quotation.count({
         where: {
           organizationId: input.organizationId,
           status: { in: ["recusada", "finalizada_outros"] },
         },
       }),
-      prisma.proposal.count({
+      firestoreDb.proposal.count({
         where: { quotation: { organizationId: input.organizationId } },
       }),
     ]);
 
   let partnershipRevenueCents: number | undefined;
   if (input.organizationType === "administradora") {
-    const agg = await prisma.commissionEntry.aggregate({
+    const agg = await firestoreDb.commissionEntry.aggregate({
       where: { administradoraOrgId: input.organizationId, status: { in: ["expected", "accrued", "paid"] } },
       _sum: { commissionCents: true },
     });
@@ -100,29 +100,29 @@ export async function getSupplierDashboardKpis(
     approvedProposals,
     rejectedProposals,
   ] = await Promise.all([
-    prisma.quotationInvite.count({
+    firestoreDb.quotationInvite.count({
       where: { supplierOrgId: organizationId, status: "pendente" },
     }),
-    prisma.proposal.count({
+    firestoreDb.proposal.count({
       where: { organizationId, status: "enviada" },
     }),
-    prisma.proposal.count({
+    firestoreDb.proposal.count({
       where: { organizationId, status: "aprovada" },
     }),
-    prisma.proposal.count({
+    firestoreDb.proposal.count({
       where: { organizationId, status: "recusada" },
     }),
-    prisma.proposal.count({
+    firestoreDb.proposal.count({
       where: { organizationId, status: "em_negociacao" },
     }),
-    prisma.complianceDocument.count({
+    firestoreDb.complianceDocument.count({
       where: { organizationId, status: "em_atraso" },
     }),
-    prisma.proposal.findMany({
+    firestoreDb.proposal.findMany({
       where: { organizationId, status: "aprovada" },
       include: { conditions: { orderBy: { amountCents: "asc" }, take: 1 } },
     }),
-    prisma.proposal.findMany({
+    firestoreDb.proposal.findMany({
       where: { organizationId, status: "recusada" },
       include: { conditions: { orderBy: { amountCents: "asc" }, take: 1 } },
     }),

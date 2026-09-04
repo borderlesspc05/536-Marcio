@@ -1,9 +1,9 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { OrganizationType } from "@prisma/client";
+import { OrganizationType } from "@/lib/domain/types";
 import { z } from "zod";
-import { prisma } from "@/lib/prisma";
+import { firestoreDb } from "@/lib/firebase/firestore-db";
 import { requireAuthorizedSession } from "@/lib/auth/guards";
 import { toPublicErrorMessage } from "@/lib/errors";
 
@@ -31,9 +31,9 @@ export async function upsertBannerAction(formData: FormData): Promise<ActionResu
     });
 
     const id = String(formData.get("id") || "") || undefined;
-    const settings = await prisma.marketingSettings.findUnique({ where: { id: "default" } });
+    const settings = await firestoreDb.marketingSettings.findUnique({ where: { id: "default" } });
     const maxActive = settings?.maxActiveBanners ?? 10;
-    const activeCount = await prisma.landingBanner.count({ where: { isActive: true } });
+    const activeCount = await firestoreDb.landingBanner.count({ where: { isActive: true } });
     const profiles = formData.getAll("targetProfiles").map(String).filter(Boolean);
     const parsed = bannerSchema.safeParse({
       title: formData.get("title"),
@@ -79,9 +79,9 @@ export async function upsertBannerAction(formData: FormData): Promise<ActionResu
     };
 
     if (id) {
-      await prisma.landingBanner.update({ where: { id }, data });
+      await firestoreDb.landingBanner.update({ where: { id }, data });
     } else {
-      await prisma.landingBanner.create({ data });
+      await firestoreDb.landingBanner.create({ data });
     }
 
     revalidatePath("/");
@@ -101,7 +101,7 @@ export async function deleteBannerAction(formData: FormData): Promise<ActionResu
     });
     const id = String(formData.get("id") ?? "");
     if (!id) return { ok: false, message: "Banner inválido." };
-    await prisma.landingBanner.delete({ where: { id } });
+    await firestoreDb.landingBanner.delete({ where: { id } });
     revalidatePath("/");
     revalidatePath("/app");
     revalidatePath("/app/plataforma/banners");
@@ -122,20 +122,35 @@ export async function updateMarketingLinksAction(formData: FormData): Promise<Ac
     const blogUrl = String(formData.get("blogUrl") ?? "").trim() || null;
     const pixelScripts = String(formData.get("pixelScripts") ?? "").trim() || null;
     const supplierLpHost = String(formData.get("supplierLpHost") ?? "").trim() || null;
+    const supplierVideoUrl = String(formData.get("supplierVideoUrl") ?? "").trim() || null;
+    if (
+      supplierVideoUrl &&
+      !/^https:\/\/(?:www\.|m\.)?(?:youtube\.com|youtu\.be)\//i.test(supplierVideoUrl)
+    ) {
+      return { ok: false, message: "Informe uma URL válida do YouTube para o vídeo de fornecedores." };
+    }
     const maxActiveBanners = Math.min(
       20,
       Math.max(1, Number(formData.get("maxActiveBanners") || 10)),
     );
 
-    await prisma.marketingSettings.upsert({
+    await firestoreDb.marketingSettings.upsert({
       where: { id: "default" },
-      update: { whatsappUrl, blogUrl, pixelScripts, supplierLpHost, maxActiveBanners },
+      update: {
+        whatsappUrl,
+        blogUrl,
+        pixelScripts,
+        supplierLpHost,
+        supplierVideoUrl,
+        maxActiveBanners,
+      },
       create: {
         id: "default",
         whatsappUrl,
         blogUrl,
         pixelScripts,
         supplierLpHost,
+        supplierVideoUrl,
         maxActiveBanners,
       },
     });

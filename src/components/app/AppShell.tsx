@@ -9,7 +9,7 @@ import { Mascot } from "@/components/brand/Mascot";
 import { logoutAction } from "@/features/auth/actions";
 import { getNavItemsForSession, profileLabel } from "@/features/navigation/menu";
 import { NotificationBell } from "@/features/notifications/components/NotificationBell";
-import type { MemberRole, OrganizationType } from "@prisma/client";
+import type { MemberRole, OrganizationType } from "@/lib/domain/types";
 import { cn } from "@/lib/cn";
 import type { PlanFeatures } from "@/features/billing/plan-gate";
 
@@ -33,16 +33,14 @@ function isActivePath(pathname: string, href: string) {
 
 function SidebarBrand({ name, profile }: { name: string; profile: string }) {
   return (
-    <div className="shrink-0 bg-[linear-gradient(180deg,#FFFFFF_0%,#FFFFFF_42%,#FAFCFD_50%,#F0F5F8_58%,#DCE7ED_67%,#BBCDD8_76%,#879FB0_84%,#4E7188_92%,#102A43_100%)] pb-4">
-      <div className="flex min-h-[88px] items-center justify-center px-5 pb-5 pt-4">
-        <Logo href="/app" priority className="h-10 max-w-full" />
+    <div className="shrink-0 border-b border-white/10 bg-[#0B1F33] pb-4">
+      <div className="flex min-h-[96px] items-center justify-center px-4 pb-4 pt-5">
+        <Logo href="/app" priority className="h-11 max-w-[168px]" />
       </div>
       <div className="px-4">
-        <div className="min-w-0 rounded-[14px] border border-white/70 bg-white/[0.78] px-3.5 py-2.5 shadow-[0_12px_32px_-22px_rgba(16,42,67,0.72),inset_0_1px_0_rgba(255,255,255,0.82)] backdrop-blur-xl">
-          <p className="truncate text-[13px] font-bold text-[#102A43]">
-            {name}
-          </p>
-          <p className="mt-0.5 truncate text-[10px] font-semibold uppercase tracking-[0.1em] text-[#526D82]">
+        <div className="min-w-0 rounded-[14px] border border-white/15 bg-[#132F48] px-3.5 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
+          <p className="truncate text-[13px] font-bold text-white">{name}</p>
+          <p className="mt-0.5 truncate text-[10px] font-semibold uppercase tracking-[0.1em] text-[#9FB3C8]">
             {profile}
           </p>
         </div>
@@ -192,7 +190,7 @@ export function AppShell({ children, session, unreadNotifications = 0, features 
                 <p className="text-sm font-bold text-[#102A43]">{session.name}</p>
                 <p className="text-xs font-medium text-slate-500">{profile}</p>
               </div>
-              <Mascot variant="avatar" className="h-9 w-9 ring-1 ring-[#A7115F]/20 ring-offset-1 ring-offset-[#F7FAFC]" />
+              <Mascot variant="avatar" className="h-9 w-9" />
             </div>
           </header>
           <main id="conteudo-principal" className="app-main flex-1 scroll-mt-20 px-4 py-6 md:px-8 md:py-8">

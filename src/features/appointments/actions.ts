@@ -5,9 +5,9 @@ import {
   AppointmentSource,
   MemberRole,
   OrganizationType,
-} from "@prisma/client";
+} from "@/lib/domain/types";
 import { revalidatePath } from "next/cache";
-import { prisma } from "@/lib/prisma";
+import { firestoreDb } from "@/lib/firebase/firestore-db";
 import { writeAuditLog } from "@/lib/audit";
 import { getRequestIp } from "@/lib/request-ip";
 import { requireAuthorizedSession } from "@/lib/auth/guards";
@@ -49,7 +49,7 @@ async function assertCanManageCondominium(input: {
   }
 
   if (input.organizationType === OrganizationType.master_service) {
-    const condo = await prisma.condominium.findFirst({
+    const condo = await firestoreDb.condominium.findFirst({
       where: {
         id: input.condominiumId,
         organization: {
@@ -61,7 +61,7 @@ async function assertCanManageCondominium(input: {
     return;
   }
 
-  const condo = await prisma.condominium.findFirst({
+  const condo = await firestoreDb.condominium.findFirst({
     where: { id: input.condominiumId, organizationId: input.organizationId },
   });
   if (!condo) throw new Error("Condomínio não encontrado.");
@@ -91,7 +91,7 @@ export async function createServiceAppointmentAction(formData: FormData): Promis
       condominiumId,
     });
 
-    const condo = await prisma.condominium.findUniqueOrThrow({
+    const condo = await firestoreDb.condominium.findUniqueOrThrow({
       where: { id: condominiumId },
       include: { organization: { include: { serviceClientProfile: true } } },
     });
@@ -99,7 +99,7 @@ export async function createServiceAppointmentAction(formData: FormData): Promis
     const { leadMode, leadExactDate } = parseLeadMode(formData);
     const ip = await getRequestIp();
 
-    const appointment = await prisma.serviceAppointment.create({
+    const appointment = await firestoreDb.serviceAppointment.create({
       data: {
         organizationId: condo.organizationId,
         serviceClientId: condo.organization.serviceClientProfile?.id ?? null,
@@ -138,7 +138,7 @@ export async function updateServiceAppointmentAction(formData: FormData): Promis
     const appointmentRaw = String(formData.get("appointmentDate") || "").trim();
     const notes = String(formData.get("notes") || "").trim() || null;
 
-    const existing = await prisma.serviceAppointment.findUnique({ where: { id } });
+    const existing = await firestoreDb.serviceAppointment.findUnique({ where: { id } });
     if (!existing) return { ok: false, message: "Compromisso não encontrado." };
 
     await assertCanManageCondominium({
@@ -155,7 +155,7 @@ export async function updateServiceAppointmentAction(formData: FormData): Promis
     const { leadMode, leadExactDate } = parseLeadMode(formData);
     const ip = await getRequestIp();
 
-    await prisma.serviceAppointment.update({
+    await firestoreDb.serviceAppointment.update({
       where: { id },
       data: {
         appointmentDate,
@@ -185,7 +185,7 @@ export async function deleteServiceAppointmentAction(formData: FormData): Promis
     const session = await requireAuthorizedSession();
     const id = String(formData.get("id") || "").trim();
 
-    const existing = await prisma.serviceAppointment.findUnique({ where: { id } });
+    const existing = await firestoreDb.serviceAppointment.findUnique({ where: { id } });
     if (!existing) return { ok: false, message: "Compromisso não encontrado." };
 
     await assertCanManageCondominium({
@@ -197,7 +197,7 @@ export async function deleteServiceAppointmentAction(formData: FormData): Promis
     });
 
     const ip = await getRequestIp();
-    await prisma.serviceAppointment.delete({ where: { id } });
+    await firestoreDb.serviceAppointment.delete({ where: { id } });
 
     await writeAuditLog({
       userId: session.userId,

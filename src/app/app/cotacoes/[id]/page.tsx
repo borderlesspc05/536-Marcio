@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireAuthorizedSession } from "@/lib/auth/guards";
-import { prisma } from "@/lib/prisma";
+import { firestoreDb } from "@/lib/firebase/firestore-db";
 import { QuotationComparePanel } from "@/features/negotiation/components/QuotationComparePanel";
 
 type PageProps = { params: Promise<{ id: string }> };
@@ -16,7 +16,7 @@ export default async function CotacaoDetalhePage({ params }: PageProps) {
   const session = await requireAuthorizedSession({ href: "/app/cotacoes" });
   const { id } = await params;
 
-  const quotation = await prisma.quotation.findFirst({
+  const quotation = await firestoreDb.quotation.findFirst({
     where: { id, organizationId: session.organizationId },
     include: {
       condominium: true,

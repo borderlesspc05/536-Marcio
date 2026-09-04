@@ -1,10 +1,35 @@
-import { listActivePlans } from "@/features/billing/plan-gate";
-import { getMarketingSettings } from "@/features/marketing/data";
 import { PublicHeader } from "@/components/marketing/PublicHeader";
 import { SupplierHero } from "@/components/marketing/SupplierHero";
 import { PlansSection, type PlanCard } from "@/components/marketing/PlansSection";
 import { WhatsAppCta } from "@/components/marketing/WhatsAppCta";
 import { PublicFooter } from "@/components/marketing/PublicFooter";
+import { SupplierHowItWorks } from "@/components/marketing/SupplierHowItWorks";
+import { BannerCarousel } from "@/components/marketing/BannerCarousel";
+import { getPublicMarketingSettings } from "@/features/marketing/public-settings";
+
+const PUBLIC_SUPPLIER_BANNERS = [
+  {
+    id: "sup-1",
+    title: "Receba oportunidades qualificadas",
+    imageUrl: "/brand/banners/02-fornecedores.svg",
+    linkUrl: "#planos-fornecedor",
+    scrollIntervalMs: 5500,
+  },
+  {
+    id: "sup-2",
+    title: "Compliance e CRM no mesmo fluxo",
+    imageUrl: "/brand/banners/03-compliance.svg",
+    linkUrl: "#planos-fornecedor",
+    scrollIntervalMs: 5500,
+  },
+  {
+    id: "sup-3",
+    title: "Escale com parcerias e planos Premium",
+    imageUrl: "/brand/banners/01-cotacoes.svg",
+    linkUrl: "#planos-fornecedor",
+    scrollIntervalMs: 5500,
+  },
+];
 
 const DISPLAY: Record<
   string,
@@ -28,54 +53,54 @@ const DISPLAY: Record<
     features: [
       "5 cotações internas/mês",
       "1 categoria do catálogo",
-      "Gestão de oportunidades",
+      "CRM básico de oportunidades",
     ],
   },
   "fornecedor-pro": {
     name: "Condo Basic",
     description: "Mais volume, categorias e elegibilidade a parcerias.",
+    priceCents: 14900,
     monthlyQuota: 30,
     features: [
-      "CRM",
+      "CRM completo",
       "30 cotações/mês",
       "3 categorias inclusas",
       "Elegível a parcerias com administradoras",
-      "Consulte Adicionais",
+      "Consulte adicionais de categoria",
     ],
     recommended: true,
   },
   "fornecedor-premium": {
     name: "Condo Premium",
     description: "Escala máxima com categorias amplas e CRM.",
+    priceCents: 24900,
     monthlyQuota: 150,
     features: [
-      "Cotações ilimitadas",
-      "Até 5 categorias",
-      "CRM",
-      "150 cotações/mês",
+      "Até 150 cotações/mês",
+      "Até 5 categorias inclusas",
+      "CRM avançado",
       "Elegível a parcerias com administradoras",
-      "Consulte Adicionais",
+      "Consulte adicionais de categoria",
     ],
   },
   "fornecedor-vip": {
     name: "Plano VIP",
-    description: "Adicionais sob relacionamento comercial, sem alterar a lógica do produto.",
+    description: "Estruture franquia, categorias e ativação sob medida.",
     monthlyQuota: null,
-    features: ["Consulte Banner Patrocinado", "Consulte Campanhas de ativação"],
+    features: [
+      "Franquia e categorias personalizadas",
+      "Banner patrocinado",
+      "Campanhas de ativação",
+      "Atendimento comercial dedicado",
+    ],
     consultPrice: true,
     hideQuota: true,
     ctaLabel: "Fale com um consultor",
   },
 };
 
-export default async function FornecedoresPage() {
-  const [marketing, plans] = await Promise.all([
-    getMarketingSettings(),
-    listActivePlans("fornecedor"),
-  ]);
-
-  const bySlug = new Map(plans.map((plan) => [plan.slug, plan]));
-
+export default function FornecedoresPage() {
+  const marketing = getPublicMarketingSettings();
   const planCards: PlanCard[] = [];
   for (const slug of [
     "fornecedor-free",
@@ -83,74 +108,40 @@ export default async function FornecedoresPage() {
     "fornecedor-premium",
     "fornecedor-vip",
   ] as const) {
-    const plan = bySlug.get(slug);
     const display = DISPLAY[slug];
     if (!display) continue;
-    if (!plan && slug !== "fornecedor-vip") continue;
 
     planCards.push({
       slug,
       name: display.name,
       description: display.description,
-      priceCents: display.priceCents ?? plan?.priceCents ?? 0,
-      isFree: plan?.isFree ?? false,
+      priceCents: display.priceCents ?? 0,
+      isFree: slug === "fornecedor-free",
       monthlyQuota: display.monthlyQuota,
       features: display.features,
       recommended: display.recommended ?? false,
       consultPrice: display.consultPrice,
       hideQuota: display.hideQuota,
       ctaLabel: display.ctaLabel,
+      quotaLabel: slug === "fornecedor-vip" ? "Fale com nossa equipe" : undefined,
       ctaHref: slug === "fornecedor-vip" ? marketing.whatsappUrl : undefined,
     });
   }
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_80%_8%,rgba(192,38,211,0.11),transparent_34%),radial-gradient(circle_at_10%_40%,rgba(6,182,212,0.08),transparent_30%),#ffffff]">
+    <div className="min-h-screen bg-[radial-gradient(circle_at_80%_8%,rgba(167,17,95,0.09),transparent_34%),radial-gradient(circle_at_10%_40%,rgba(8,127,140,0.07),transparent_30%),#ffffff]">
       <PublicHeader blogUrl={marketing.blogUrl} />
-      {marketing.pixelScripts ? (
-        <div dangerouslySetInnerHTML={{ __html: marketing.pixelScripts }} />
-      ) : null}
       <main>
-        <SupplierHero />
+        <BannerCarousel banners={PUBLIC_SUPPLIER_BANNERS} />
+        <SupplierHero videoUrl={marketing.supplierVideoUrl} />
         <PlansSection
           id="planos-fornecedor"
           title="Planos para fornecedores"
-          subtitle="Do Free ao Premium: mais categorias, elegibilidade a parcerias e CRM. VIP para ativação comercial."
+          subtitle="Free, Basic, Premium e VIP — use as setas do banner para navegar e contrate direto pelo checkout."
           plans={planCards}
           audience="fornecedor"
         />
-        <section className="pb-8">
-          <div className="mx-auto max-w-[1280px] px-6 sm:px-12 lg:px-20">
-            <div className="rounded-[28px] border border-black/5 bg-white/80 p-6 sm:p-8">
-              <h2 className="text-2xl font-extrabold text-[#0A0A0A]">Como funciona</h2>
-              <ol className="mt-5 grid gap-4 sm:grid-cols-3">
-                {[
-                  {
-                    step: "1",
-                    title: "Cadastro",
-                    text: "Cadastre sua empresa",
-                  },
-                  {
-                    step: "2",
-                    title: "Validação",
-                    text: "Envie seus documentos",
-                  },
-                  {
-                    step: "3",
-                    title: "Oportunidades",
-                    text: "Receba oportunidades, aceite, recuse e seja avisado sobre a finalização do processo.",
-                  },
-                ].map((item) => (
-                  <li key={item.step} className="rounded-2xl border border-black/5 p-4">
-                    <p className="text-sm font-semibold text-[#9333EA]">Passo {item.step}</p>
-                    <p className="mt-1 font-bold text-[#0A0A0A]">{item.title}</p>
-                    <p className="mt-1 text-sm text-[#6B7280]">{item.text}</p>
-                  </li>
-                ))}
-              </ol>
-            </div>
-          </div>
-        </section>
+        <SupplierHowItWorks />
         <WhatsAppCta
           whatsappUrl={marketing.whatsappUrl}
           title="Fale com um consultor"

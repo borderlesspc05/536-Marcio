@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/prisma";
+import { firestoreDb } from "@/lib/firebase/firestore-db";
 import { getPlanGate, type PlanFeatures } from "@/features/billing/plan-gate";
 import { currentYearMonth } from "@/features/quotations/franchise";
 
@@ -42,14 +42,14 @@ function parseFeatures(json: string | null | undefined): PlanFeatures & {
 
 async function loadContext(organizationId: string, yearMonth: string) {
   const [settings, override, subscription, usage] = await Promise.all([
-    prisma.platformSettings.findUnique({ where: { id: "default" } }),
-    prisma.planOverride.findUnique({ where: { organizationId } }),
-    prisma.subscription.findFirst({
+    firestoreDb.platformSettings.findUnique({ where: { id: "default" } }),
+    firestoreDb.planOverride.findUnique({ where: { organizationId } }),
+    firestoreDb.subscription.findFirst({
       where: { organizationId, status: "active" },
       include: { plan: true },
       orderBy: { createdAt: "desc" },
     }),
-    prisma.franchiseUsage.findUnique({
+    firestoreDb.franchiseUsage.findUnique({
       where: { organizationId_yearMonth: { organizationId, yearMonth } },
     }),
   ]);
@@ -123,7 +123,7 @@ export async function getSupplierPlanInfo(organizationId: string): Promise<Suppl
   const overrideFeatures = parseFeatures(override?.featuresJson);
   const features = { ...planFeatures, ...overrideFeatures };
 
-  const links = await prisma.organizationCategory.findMany({
+  const links = await firestoreDb.organizationCategory.findMany({
     where: { organizationId },
     include: { category: true, serviceItem: true },
     orderBy: { createdAt: "asc" },
@@ -177,7 +177,7 @@ export async function assertSupplierCanAccessCategory(
   categoryId: string,
   serviceItemId?: string,
 ): Promise<void> {
-  const links = await prisma.organizationCategory.findMany({
+  const links = await firestoreDb.organizationCategory.findMany({
     where: { organizationId, categoryId },
   });
   if (links.length === 0) {

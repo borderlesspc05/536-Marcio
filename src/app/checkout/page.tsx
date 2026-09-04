@@ -9,7 +9,7 @@ import {
   RefreshCw,
   ShieldCheck,
 } from "lucide-react";
-import { prisma } from "@/lib/prisma";
+import { firestoreDb } from "@/lib/firebase/firestore-db";
 import { getSession } from "@/lib/auth/session";
 import { formatPriceCents, getPlanGate, listActivePlans } from "@/features/billing/plan-gate";
 import { describePlanFeatures, isConsultOnlyPlan } from "@/features/billing/plan-features";
@@ -127,7 +127,7 @@ export default async function CheckoutPage({ searchParams }: PageProps) {
     );
   }
 
-  const plan = await prisma.plan.findFirst({
+  const plan = await firestoreDb.plan.findFirst({
     where: { slug: planSlug, isActive: true },
   });
 
@@ -168,9 +168,11 @@ export default async function CheckoutPage({ searchParams }: PageProps) {
     audience: plan.audience,
   });
 
-  const isCurrentPlan =
-    gate?.planSlug === plan.slug &&
-    ["active", "past_due"].includes(gate.subscriptionStatus);
+  const isCurrentPlan = Boolean(
+    gate &&
+      gate.planSlug === plan.slug &&
+      ["active", "past_due"].includes(gate.subscriptionStatus),
+  );
   const isConsultOnly = isConsultOnlyPlan(plan);
   const consultUrl = `${marketing.whatsappUrl}${marketing.whatsappUrl.includes("?") ? "&" : "?"}text=${encodeURIComponent(
     `Olá! Tenho interesse no plano ${plan.name} da CotaCondo e gostaria de falar com um consultor.`,

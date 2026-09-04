@@ -1,11 +1,12 @@
-import { OrganizationType } from "@prisma/client";
+import { OrganizationType } from "@/lib/domain/types";
 import { requireAuthorizedSession } from "@/lib/auth/guards";
-import { prisma } from "@/lib/prisma";
+import { firestoreDb } from "@/lib/firebase/firestore-db";
 import { registerReferralRewardAction } from "@/features/referrals/actions";
 import { resolveReferralStatus } from "@/features/referrals/rewards";
 import { formAction } from "@/lib/form-action";
 import { formatPriceCents } from "@/features/billing/money";
 import { Button } from "@/components/ui/Button";
+import { CopyButton } from "@/components/ui/CopyButton";
 
 export default async function IndicacoesPage() {
   const session = await requireAuthorizedSession({
@@ -17,10 +18,10 @@ export default async function IndicacoesPage() {
     href: "/app/indicacoes",
   });
 
-  let user = await prisma.user.findUniqueOrThrow({ where: { id: session.userId } });
+  let user = await firestoreDb.user.findUniqueOrThrow({ where: { id: session.userId } });
   if (!user.referralCode) {
     const code = `CC-${Math.random().toString(36).slice(2, 10).toUpperCase()}`;
-    user = await prisma.user.update({
+    user = await firestoreDb.user.update({
       where: { id: session.userId },
       data: { referralCode: code },
     });
@@ -30,7 +31,7 @@ export default async function IndicacoesPage() {
   const referralLink = `${baseUrl}/cadastro?ref=${user.referralCode}`;
 
   const [referrals, rewards] = await Promise.all([
-    prisma.user.findMany({
+    firestoreDb.user.findMany({
       where: { referredByUserId: session.userId },
       select: {
         id: true,
@@ -43,7 +44,7 @@ export default async function IndicacoesPage() {
       },
       orderBy: { createdAt: "desc" },
     }),
-    prisma.referralReward.findMany({
+    firestoreDb.referralReward.findMany({
       where: { referrerUserId: session.userId },
       include: { referred: { select: { name: true, email: true } } },
       orderBy: { createdAt: "desc" },
@@ -74,7 +75,10 @@ export default async function IndicacoesPage() {
       <div className="rounded-2xl border border-black/5 bg-white/80 p-5">
         <p className="text-sm text-neutral-500">Seu link de indicação</p>
         <p className="mt-2 break-all font-mono text-sm font-semibold text-[#9333EA]">{referralLink}</p>
-        <p className="mt-2 text-xs text-neutral-500">Código: {user.referralCode}</p>
+        <div className="mt-3 flex flex-wrap items-center gap-3">
+          <CopyButton value={referralLink} />
+          <p className="text-xs text-neutral-500">Código: {user.referralCode}</p>
+        </div>
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">

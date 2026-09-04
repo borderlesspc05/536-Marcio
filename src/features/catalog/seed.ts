@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/prisma";
+import { firestoreDb } from "@/lib/firebase/firestore-db";
 import { CATALOG_SEED, itemSlug, catalogTotals } from "@/features/catalog/seed-data";
 
 export async function seedOfficialCatalog() {
@@ -6,7 +6,7 @@ export async function seedOfficialCatalog() {
   let itemCount = 0;
 
   for (const [categoryIndex, category] of CATALOG_SEED.entries()) {
-    const saved = await prisma.serviceCategory.upsert({
+    const saved = await firestoreDb.serviceCategory.upsert({
       where: { slug: category.slug },
       update: {
         name: category.name,
@@ -27,7 +27,7 @@ export async function seedOfficialCatalog() {
 
     for (const [itemIndex, item] of category.items.entries()) {
       const slug = itemSlug(item.name);
-      await prisma.serviceItem.upsert({
+      await firestoreDb.serviceItem.upsert({
         where: {
           categoryId_slug: {
             categoryId: saved.id,

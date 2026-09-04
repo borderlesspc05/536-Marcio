@@ -1,6 +1,6 @@
-import { OrganizationType } from "@prisma/client";
+import { OrganizationType } from "@/lib/domain/types";
 import { requireAuthorizedSession } from "@/lib/auth/guards";
-import { prisma } from "@/lib/prisma";
+import { firestoreDb } from "@/lib/firebase/firestore-db";
 import { markOverdueCompliance } from "@/features/compliance/expire";
 import { ComplianceUploadForm } from "@/features/compliance/components/ComplianceUploadForm";
 import { updateReputationLinksAction } from "@/features/compliance/actions";
@@ -30,12 +30,12 @@ export default async function CompliancePage() {
   await markOverdueCompliance(session.organizationId);
 
   const [documents, organization] = await Promise.all([
-    prisma.complianceDocument.findMany({
+    firestoreDb.complianceDocument.findMany({
       where: { organizationId: session.organizationId },
       orderBy: { createdAt: "desc" },
       include: { replaces: { select: { id: true, documentType: true, createdAt: true } } },
     }),
-    prisma.organization.findUniqueOrThrow({ where: { id: session.organizationId } }),
+    firestoreDb.organization.findUniqueOrThrow({ where: { id: session.organizationId } }),
   ]);
 
   return (

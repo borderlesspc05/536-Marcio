@@ -1,7 +1,7 @@
 import Link from "next/link";
-import { OrganizationType } from "@prisma/client";
+import { OrganizationType } from "@/lib/domain/types";
 import { requireAuthorizedSession } from "@/lib/auth/guards";
-import { prisma } from "@/lib/prisma";
+import { firestoreDb } from "@/lib/firebase/firestore-db";
 import { DeclineInviteForm } from "@/features/opportunities/components/DeclineInviteForm";
 import { ProposalForm } from "@/features/opportunities/components/ProposalForm";
 import { SupplierNegotiationPanel } from "@/features/negotiation/components/SupplierNegotiationPanel";
@@ -56,15 +56,15 @@ export default async function OportunidadesPage({ searchParams }: PageProps) {
 
   const [franchise, overdueDocs, categories, invites] = await Promise.all([
     getSupplierFranchiseBalance(session.organizationId),
-    prisma.complianceDocument.count({
+    firestoreDb.complianceDocument.count({
       where: { organizationId: session.organizationId, status: "em_atraso" },
     }),
-    prisma.serviceCategory.findMany({
+    firestoreDb.serviceCategory.findMany({
       where: { isActive: true, deletedAt: null },
       orderBy: { sortOrder: "asc" },
       select: { id: true, name: true },
     }),
-    prisma.quotationInvite.findMany({
+    firestoreDb.quotationInvite.findMany({
       where: {
         supplierOrgId: session.organizationId,
         ...(statusFilter ? { status: statusFilter as "pendente" | "aceito" | "declinado" | "expirado" } : {}),
@@ -110,6 +110,7 @@ export default async function OportunidadesPage({ searchParams }: PageProps) {
       urgency: invite.quotation.urgency,
       createdAt: invite.createdAt.toISOString(),
       proposalValue: firstCondition ? formatPriceCents(firstCondition.amountCents) : null,
+      proposalValueCents: firstCondition?.amountCents ?? null,
       officialStatus: invite.proposal?.status ?? invite.status,
       stage: deriveSupplierPipelineStage({
         savedStage: invite.supplierPipelineStage,

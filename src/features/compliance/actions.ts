@@ -1,9 +1,9 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { OrganizationType } from "@prisma/client";
+import { OrganizationType } from "@/lib/domain/types";
 import { z } from "zod";
-import { prisma } from "@/lib/prisma";
+import { firestoreDb } from "@/lib/firebase/firestore-db";
 import { requireAuthorizedSession } from "@/lib/auth/guards";
 import { toPublicErrorMessage } from "@/lib/errors";
 import { writeAuditLog } from "@/lib/audit";
@@ -36,7 +36,7 @@ export async function updateReputationLinksAction(formData: FormData): Promise<A
       return { ok: false, message: "Informe URLs válidas ou deixe em branco." };
     }
 
-    await prisma.organization.update({
+    await firestoreDb.organization.update({
       where: { id: session.organizationId },
       data: {
         googleProfileUrl: parsed.data.googleProfileUrl || null,
@@ -87,7 +87,7 @@ export async function uploadComplianceDocumentAction(
 
     const replacesId = String(formData.get("replacesId") || "") || null;
     if (replacesId) {
-      const previous = await prisma.complianceDocument.findFirst({
+      const previous = await firestoreDb.complianceDocument.findFirst({
         where: { id: replacesId, organizationId: session.organizationId },
       });
       if (!previous) return { ok: false, message: "Documento anterior não encontrado." };
@@ -98,7 +98,7 @@ export async function uploadComplianceDocumentAction(
       file,
     });
 
-    const created = await prisma.complianceDocument.create({
+    const created = await firestoreDb.complianceDocument.create({
       data: {
         organizationId: session.organizationId,
         documentType: parsed.data.documentType,
@@ -112,7 +112,7 @@ export async function uploadComplianceDocumentAction(
       },
     });
 
-    await prisma.domainEvent.create({
+    await firestoreDb.domainEvent.create({
       data: {
         type: "compliance.updated",
         entityType: "compliance_document",
@@ -155,12 +155,12 @@ export async function reviewComplianceDocumentAction(
       return { ok: false, message: parsed.error.issues[0]?.message ?? "Dados inválidos" };
     }
 
-    const doc = await prisma.complianceDocument.findUnique({
+    const doc = await firestoreDb.complianceDocument.findUnique({
       where: { id: parsed.data.documentId },
     });
     if (!doc) return { ok: false, message: "Documento não encontrado." };
 
-    const updated = await prisma.complianceDocument.update({
+    const updated = await firestoreDb.complianceDocument.update({
       where: { id: doc.id },
       data: {
         status: parsed.data.decision,
@@ -170,7 +170,7 @@ export async function reviewComplianceDocumentAction(
       },
     });
 
-    await prisma.domainEvent.create({
+    await firestoreDb.domainEvent.create({
       data: {
         type: "compliance.updated",
         entityType: "compliance_document",

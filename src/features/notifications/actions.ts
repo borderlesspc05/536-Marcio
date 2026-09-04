@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { prisma } from "@/lib/prisma";
+import { firestoreDb } from "@/lib/firebase/firestore-db";
 import { requireAuthorizedSession } from "@/lib/auth/guards";
 import { toPublicErrorMessage } from "@/lib/errors";
 
@@ -13,13 +13,13 @@ export async function markNotificationReadAction(formData: FormData): Promise<Ac
     const id = String(formData.get("id") ?? "");
     if (!id) return { ok: false, message: "Notificação inválida." };
 
-    const item = await prisma.notification.findFirst({
+    const item = await firestoreDb.notification.findFirst({
       where: { id, userId: session.userId },
     });
     if (!item) return { ok: false, message: "Notificação não encontrada." };
 
     if (!item.readAt) {
-      await prisma.notification.update({
+      await firestoreDb.notification.update({
         where: { id },
         data: { readAt: new Date() },
       });
@@ -36,7 +36,7 @@ export async function markNotificationReadAction(formData: FormData): Promise<Ac
 export async function markAllNotificationsReadAction(): Promise<ActionResult> {
   try {
     const session = await requireAuthorizedSession({ href: "/app/notificacoes" });
-    await prisma.notification.updateMany({
+    await firestoreDb.notification.updateMany({
       where: { userId: session.userId, readAt: null },
       data: { readAt: new Date() },
     });

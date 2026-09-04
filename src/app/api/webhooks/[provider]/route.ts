@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { firestoreDb } from "@/lib/firebase/firestore-db";
 import { getPaymentProvider } from "@/features/billing/payment-provider";
 import {
   fulfillCheckoutPaid,
@@ -43,7 +43,7 @@ export async function POST(
     );
   }
 
-  const existing = await prisma.paymentWebhookEvent.findUnique({
+  const existing = await firestoreDb.paymentWebhookEvent.findUnique({
     where: {
       provider_eventId: { provider: provider.name, eventId: parsed.eventId },
     },
@@ -54,7 +54,7 @@ export async function POST(
 
   const event = existing
     ? existing
-    : await prisma.paymentWebhookEvent.create({
+    : await firestoreDb.paymentWebhookEvent.create({
         data: {
           provider: provider.name,
           eventId: parsed.eventId,
@@ -63,7 +63,7 @@ export async function POST(
         },
       });
 
-  const checkout = await prisma.paymentCheckout.findFirst({
+  const checkout = await firestoreDb.paymentCheckout.findFirst({
     where: { externalId: parsed.externalCheckoutId },
   });
   if (!checkout) {
@@ -76,7 +76,7 @@ export async function POST(
     await markCheckoutFailed(checkout.id, parsed.status);
   }
 
-  await prisma.paymentWebhookEvent.update({
+  await firestoreDb.paymentWebhookEvent.update({
     where: { id: event.id },
     data: { processedAt: new Date() },
   });

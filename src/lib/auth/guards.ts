@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { MemberRole, type OrganizationType } from "@prisma/client";
+import { MemberRole, type OrganizationType } from "@/lib/domain/types";
 import { getSession, type SessionPayload } from "@/lib/auth/session";
 import { canAccessHref } from "@/features/navigation/menu";
 

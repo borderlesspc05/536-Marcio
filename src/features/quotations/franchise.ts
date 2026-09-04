@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/prisma";
+import { firestoreDb } from "@/lib/firebase/firestore-db";
 
 export type FranchiseBalance = {
   yearMonth: string;
@@ -32,14 +32,14 @@ function resolveLimit(input: {
 
 async function loadFranchiseContext(organizationId: string, yearMonth: string) {
   const [settings, override, subscription, usage] = await Promise.all([
-    prisma.platformSettings.findUnique({ where: { id: "default" } }),
-    prisma.planOverride.findUnique({ where: { organizationId } }),
-    prisma.subscription.findFirst({
+    firestoreDb.platformSettings.findUnique({ where: { id: "default" } }),
+    firestoreDb.planOverride.findUnique({ where: { organizationId } }),
+    firestoreDb.subscription.findFirst({
       where: { organizationId, status: "active" },
       include: { plan: true },
       orderBy: { createdAt: "desc" },
     }),
-    prisma.franchiseUsage.findUnique({
+    firestoreDb.franchiseUsage.findUnique({
       where: { organizationId_yearMonth: { organizationId, yearMonth } },
     }),
   ]);
@@ -87,7 +87,7 @@ export async function createQuotationConsumingFranchise(input: {
 }) {
   const yearMonth = currentYearMonth();
 
-  return prisma.$transaction(async (tx) => {
+  return firestoreDb.$transaction(async (tx) => {
     const [settings, override, subscription, usage] = await Promise.all([
       tx.platformSettings.findUnique({ where: { id: "default" } }),
       tx.planOverride.findUnique({ where: { organizationId: input.organizationId } }),

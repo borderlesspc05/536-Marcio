@@ -1,9 +1,9 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { MemberRole, OrganizationType } from "@prisma/client";
+import { MemberRole, OrganizationType } from "@/lib/domain/types";
 import { z } from "zod";
-import { prisma } from "@/lib/prisma";
+import { firestoreDb } from "@/lib/firebase/firestore-db";
 import { requireAuthorizedSession } from "@/lib/auth/guards";
 import { toPublicErrorMessage } from "@/lib/errors";
 import { writeAuditLog } from "@/lib/audit";
@@ -55,7 +55,7 @@ export async function createCommissionAgreementAction(formData: FormData): Promi
         ? null
         : new Date(Date.now() + parsed.data.durationMonths * 30 * 86400000);
 
-    await prisma.commissionAgreement.create({
+    await firestoreDb.commissionAgreement.create({
       data: {
         administradoraOrgId: session.organizationId,
         supplierOrgId: parsed.data.supplierOrgId,
@@ -117,12 +117,12 @@ export async function updateCommissionAgreementAction(formData: FormData): Promi
       return { ok: false, message: "Dados inválidos para edição." };
     }
 
-    const agreement = await prisma.commissionAgreement.findFirst({
+    const agreement = await firestoreDb.commissionAgreement.findFirst({
       where: { id, administradoraOrgId: session.organizationId },
     });
     if (!agreement) return { ok: false, message: "Acordo não encontrado." };
 
-    await prisma.commissionAgreement.update({
+    await firestoreDb.commissionAgreement.update({
       where: { id },
       data: {
         feeType: feeType as "fixed" | "percent",
@@ -147,6 +147,51 @@ export async function updateCommissionAgreementAction(formData: FormData): Promi
   }
 }
 
+export async function deleteCommissionAgreementFormAction(
+  _state: ActionResult | null,
+  formData: FormData,
+): Promise<ActionResult> {
+  return deleteCommissionAgreementAction(formData);
+}
+
+export async function deleteCommissionAgreementAction(formData: FormData): Promise<ActionResult> {
+  try {
+    const session = await requireAuthorizedSession({
+      types: [OrganizationType.administradora],
+      roles: [MemberRole.master],
+      href: "/app/financeiro",
+    });
+
+    const gate = await getPlanGate(session.organizationId);
+    if (!can(gate, "commissions")) {
+      return { ok: false, message: "Comissões disponíveis no plano Premium." };
+    }
+
+    const id = String(formData.get("id") ?? "");
+    if (!id) return { ok: false, message: "Acordo inválido." };
+
+    const agreement = await firestoreDb.commissionAgreement.findFirst({
+      where: { id, administradoraOrgId: session.organizationId },
+    });
+    if (!agreement) return { ok: false, message: "Acordo não encontrado." };
+
+    await firestoreDb.commissionAgreement.delete({ where: { id } });
+
+    await writeAuditLog({
+      userId: session.userId,
+      action: "commission.agreement_deleted",
+      entityType: "commission_agreement",
+      entityId: id,
+    });
+
+    revalidatePath("/app/financeiro");
+    revalidatePath("/app");
+    return { ok: true, message: "Acordo excluído." };
+  } catch (error) {
+    return { ok: false, message: toPublicErrorMessage(error) };
+  }
+}
+
 /** Hook pós quotation.approved — alimenta ledger de expectativa de receita. */
 export async function recordCommissionFromApproval(input: {
   administradoraOrgId: string;
@@ -157,7 +202,7 @@ export async function recordCommissionFromApproval(input: {
   volumeCents: number;
   categoryId?: string | null;
 }) {
-  const org = await prisma.organization.findUnique({
+  const org = await firestoreDb.organization.findUnique({
     where: { id: input.administradoraOrgId },
   });
   if (!org || org.type !== "administradora") return null;
@@ -165,7 +210,7 @@ export async function recordCommissionFromApproval(input: {
   const gate = await getPlanGate(input.administradoraOrgId);
   if (!can(gate, "commissions")) return null;
 
-  const agreement = await prisma.commissionAgreement.findFirst({
+  const agreement = await firestoreDb.commissionAgreement.findFirst({
     where: {
       administradoraOrgId: input.administradoraOrgId,
       supplierOrgId: input.supplierOrgId,
@@ -180,7 +225,7 @@ export async function recordCommissionFromApproval(input: {
       ? Math.round(agreement.feeValue * 100)
       : Math.round((input.volumeCents * agreement.feeValue) / 100);
 
-  const entry = await prisma.commissionEntry.create({
+  const entry = await firestoreDb.commissionEntry.create({
     data: {
       agreementId: agreement.id,
       administradoraOrgId: input.administradoraOrgId,
@@ -197,7 +242,7 @@ export async function recordCommissionFromApproval(input: {
     },
   });
 
-  await prisma.domainEvent.create({
+  await firestoreDb.domainEvent.create({
     data: {
       type: "commission.expected",
       entityType: "commission_entry",

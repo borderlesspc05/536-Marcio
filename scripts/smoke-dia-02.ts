@@ -1,4 +1,4 @@
-import { prisma } from "../src/lib/prisma";
+import { firestoreDb } from "../src/lib/firebase/firestore-db";
 import { catalogTotals } from "../src/features/catalog/seed-data";
 import {
   createQuotationConsumingFranchise,
@@ -7,8 +7,8 @@ import {
 
 async function main() {
   const expected = catalogTotals();
-  const categories = await prisma.serviceCategory.count({ where: { deletedAt: null } });
-  const services = await prisma.serviceItem.count({ where: { deletedAt: null } });
+  const categories = await firestoreDb.serviceCategory.count({ where: { deletedAt: null } });
+  const services = await firestoreDb.serviceItem.count({ where: { deletedAt: null } });
   if (categories !== expected.categories || services !== expected.services) {
     throw new Error(
       `Catálogo inválido: ${categories}/${services}, esperado ${expected.categories}/${expected.services}`,
@@ -16,15 +16,15 @@ async function main() {
   }
   console.log(`Catálogo OK: ${categories} categorias / ${services} serviços`);
 
-  const org = await prisma.organization.findFirst({ where: { type: "sindico" } });
+  const org = await firestoreDb.organization.findFirst({ where: { type: "sindico" } });
   if (!org) throw new Error("Org síndico ausente");
-  const user = await prisma.user.findFirst({ where: { email: "sindico@demo.cotacondo.com.br" } });
+  const user = await firestoreDb.user.findFirst({ where: { email: "sindico@demo.cotacondo.com.br" } });
   if (!user) throw new Error("Usuário síndico ausente");
 
   const before = await getFranchiseBalance(org.id);
   console.log("Franquia antes:", before);
 
-  const condo = await prisma.condominium.create({
+  const condo = await firestoreDb.condominium.create({
     data: {
       organizationId: org.id,
       name: "Smoke Condo Dia 2",
@@ -33,10 +33,10 @@ async function main() {
     },
   });
 
-  const category = await prisma.serviceCategory.findFirst({
+  const category = await firestoreDb.serviceCategory.findFirst({
     where: { slug: "seguros", deletedAt: null },
   });
-  const service = await prisma.serviceItem.findFirst({
+  const service = await firestoreDb.serviceItem.findFirst({
     where: { categoryId: category!.id, slug: "incendio", deletedAt: null },
   });
   if (!category || !service) throw new Error("Categoria/serviço seed ausente");
@@ -66,5 +66,5 @@ main()
     process.exit(1);
   })
   .finally(async () => {
-    await prisma.$disconnect();
+    await firestoreDb.$disconnect();
   });

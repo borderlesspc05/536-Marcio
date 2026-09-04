@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { requireAuthorizedSession } from "@/lib/auth/guards";
-import { prisma } from "@/lib/prisma";
+import { firestoreDb } from "@/lib/firebase/firestore-db";
 import { getFranchiseBalance } from "@/features/quotations/franchise";
 import { NewQuotationForm } from "@/features/quotations/components/NewQuotationForm";
 
@@ -8,17 +8,17 @@ export default async function NovaCotacaoPage() {
   const session = await requireAuthorizedSession({ href: "/app/cotacoes" });
 
   const [condominiums, categories, services, franchise] = await Promise.all([
-    prisma.condominium.findMany({
+    firestoreDb.condominium.findMany({
       where: { organizationId: session.organizationId, archivedAt: null },
       orderBy: { name: "asc" },
       select: { id: true, name: true },
     }),
-    prisma.serviceCategory.findMany({
+    firestoreDb.serviceCategory.findMany({
       where: { isActive: true, deletedAt: null },
       orderBy: { sortOrder: "asc" },
       select: { id: true, name: true },
     }),
-    prisma.serviceItem.findMany({
+    firestoreDb.serviceItem.findMany({
       where: { isActive: true, deletedAt: null },
       orderBy: { sortOrder: "asc" },
       select: {

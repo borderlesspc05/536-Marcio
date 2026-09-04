@@ -41,17 +41,9 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    function memberDoc(orgId) {
-      return get(/databases/$(database)/documents/organization_members/$(request.auth.uid + '_' + orgId));
-    }
-
     function isOrgMember(orgId) {
       return isAuthenticated()
         && exists(/databases/$(database)/documents/organization_members/$(request.auth.uid + '_' + orgId));
-    }
-
-    function isOrgMaster(orgId) {
-      return isOrgMember(orgId) && memberDoc(orgId).data.role == 'master';
     }
 
     function isMasterAdmin() {

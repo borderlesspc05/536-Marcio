@@ -1,4 +1,4 @@
-import { prisma } from "../src/lib/prisma";
+import { firestoreDb } from "../src/lib/firebase/firestore-db";
 import { evaluatePriceAgainstAverage } from "../src/features/opportunities/analysis";
 import { getSupplierPlanInfo } from "../src/features/supplier/franchise";
 import { runDistributionEngine } from "../src/features/distribution/engine";
@@ -10,21 +10,21 @@ async function main() {
   }
   console.log(`Avaliar preço OK: +${evalOk.percentDelta}%`);
 
-  const fornecedor = await prisma.organization.findFirst({ where: { type: "fornecedor" } });
+  const fornecedor = await firestoreDb.organization.findFirst({ where: { type: "fornecedor" } });
   if (!fornecedor) throw new Error("Fornecedor demo ausente");
 
   // Backfill segmentos se legado sem serviceItemId
-  const links = await prisma.organizationCategory.findMany({
+  const links = await firestoreDb.organizationCategory.findMany({
     where: { organizationId: fornecedor.id },
   });
   for (const link of links) {
     if (!link.serviceItemId) {
-      const first = await prisma.serviceItem.findFirst({
+      const first = await firestoreDb.serviceItem.findFirst({
         where: { categoryId: link.categoryId, deletedAt: null },
         orderBy: { sortOrder: "asc" },
       });
       if (first) {
-        await prisma.organizationCategory.update({
+        await firestoreDb.organizationCategory.update({
           where: { id: link.id },
           data: { serviceItemId: first.id },
         });
@@ -38,7 +38,7 @@ async function main() {
     `Plano fornecedor OK: cats=${plan.categoriesIncluded} segs=${plan.segmentsIncluded} links=${plan.links.length}`,
   );
 
-  const quotation = await prisma.quotation.findFirst({
+  const quotation = await firestoreDb.quotation.findFirst({
     where: { status: { in: ["aberta", "em_negociacao"] } },
     include: { invites: true },
   });
@@ -49,7 +49,7 @@ async function main() {
     );
   }
 
-  const org = await prisma.organization.update({
+  const org = await firestoreDb.organization.update({
     where: { id: fornecedor.id },
     data: {
       googleProfileUrl: "https://maps.google.com/?q=cotacondo-demo",
@@ -59,9 +59,9 @@ async function main() {
   if (!org.googleProfileUrl) throw new Error("Reputação não gravou");
   console.log("Reputação Google/Reclame Aqui OK");
 
-  const banner = await prisma.landingBanner.findFirst();
+  const banner = await firestoreDb.landingBanner.findFirst();
   if (banner) {
-    await prisma.landingBanner.update({
+    await firestoreDb.landingBanner.update({
       where: { id: banner.id },
       data: { scrollIntervalMs: 4000 },
     });
@@ -77,5 +77,5 @@ main()
     process.exit(1);
   })
   .finally(async () => {
-    await prisma.$disconnect();
+    await firestoreDb.$disconnect();
   });

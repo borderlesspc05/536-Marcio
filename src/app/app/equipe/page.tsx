@@ -1,8 +1,12 @@
-import { MemberRole, OrganizationType } from "@prisma/client";
+import { MemberRole, OrganizationType } from "@/lib/domain/types";
 import { requireAuthorizedSession } from "@/lib/auth/guards";
-import { prisma } from "@/lib/prisma";
+import { firestoreDb } from "@/lib/firebase/firestore-db";
 import { inviteTeamMemberAction } from "@/features/referrals/actions";
-import { inviteExternalApproverAction } from "@/features/external-approver/actions";
+import {
+  inviteExternalApproverAction,
+  removeExternalApproverAction,
+  updateExternalApproverScopesAction,
+} from "@/features/external-approver/actions";
 import { formAction } from "@/lib/form-action";
 import { Button } from "@/components/ui/Button";
 
@@ -13,7 +17,7 @@ export default async function EquipePage() {
   });
 
   const [members, condominiums] = await Promise.all([
-    prisma.organizationMember.findMany({
+    firestoreDb.organizationMember.findMany({
       where: { organizationId: session.organizationId },
       include: {
         user: {
@@ -27,16 +31,19 @@ export default async function EquipePage() {
       },
       orderBy: { createdAt: "asc" },
     }),
-    prisma.condominium.findMany({
+    firestoreDb.condominium.findMany({
       where: { organizationId: session.organizationId, archivedAt: null },
       orderBy: { name: "asc" },
     }),
   ]);
 
   const canInvite = session.role === MemberRole.master;
-  const serviceClient = await prisma.serviceClient.findUnique({
+  const serviceClient = await firestoreDb.serviceClient.findUnique({
     where: { clientOrgId: session.organizationId },
   });
+  const externalApprovers = members.filter(
+    (member) => member.role === MemberRole.external_approver,
+  );
 
   return (
     <div className="space-y-6">
@@ -157,6 +164,64 @@ export default async function EquipePage() {
               </div>
             </form>
           </div>
+
+          {externalApprovers.length > 0 ? (
+            <div className="space-y-4">
+              <h2 className="font-semibold">Gerenciar aprovadores externos</h2>
+              {externalApprovers.map((member) => {
+                const linked = new Set(
+                  member.user.externalApproverScopes.map((scope) => scope.condominiumId),
+                );
+                return (
+                  <div
+                    key={member.id}
+                    className="rounded-2xl border border-black/5 bg-white/80 p-5"
+                  >
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <p className="font-semibold text-neutral-900">{member.user.name}</p>
+                        <p className="text-sm text-neutral-500">{member.user.email}</p>
+                      </div>
+                      <form action={formAction(removeExternalApproverAction)}>
+                        <input type="hidden" name="userId" value={member.userId} />
+                        <Button type="submit" variant="secondary" size="sm">
+                          Excluir aprovador
+                        </Button>
+                      </form>
+                    </div>
+                    <form
+                      action={formAction(updateExternalApproverScopesAction)}
+                      className="mt-4 space-y-3"
+                    >
+                      <input type="hidden" name="userId" value={member.userId} />
+                      <fieldset className="text-sm">
+                        <legend className="font-medium">Condomínios vinculados</legend>
+                        <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                          {condominiums.map((condo) => (
+                            <label
+                              key={condo.id}
+                              className="flex items-center gap-2 rounded-lg border border-black/5 bg-neutral-50 px-3 py-2"
+                            >
+                              <input
+                                type="checkbox"
+                                name="condominiumIds"
+                                value={condo.id}
+                                defaultChecked={linked.has(condo.id)}
+                              />
+                              {condo.name}
+                            </label>
+                          ))}
+                        </div>
+                      </fieldset>
+                      <Button type="submit" size="sm">
+                        Salvar vínculos
+                      </Button>
+                    </form>
+                  </div>
+                );
+              })}
+            </div>
+          ) : null}
         </>
       ) : (
         <p className="text-sm text-neutral-500">Apenas o Master pode convidar usuários.</p>

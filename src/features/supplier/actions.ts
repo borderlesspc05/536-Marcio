@@ -1,8 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { OrganizationType } from "@prisma/client";
-import { prisma } from "@/lib/prisma";
+import { OrganizationType } from "@/lib/domain/types";
+import { firestoreDb } from "@/lib/firebase/firestore-db";
 import { requireAuthorizedSession } from "@/lib/auth/guards";
 import { toPublicErrorMessage } from "@/lib/errors";
 import { writeAuditLog } from "@/lib/audit";
@@ -55,7 +55,7 @@ export async function updateSupplierCategoriesAction(
     }
 
     for (const link of parsed.data.links) {
-      const item = await prisma.serviceItem.findFirst({
+      const item = await firestoreDb.serviceItem.findFirst({
         where: {
           id: link.serviceItemId,
           categoryId: link.categoryId,
@@ -68,7 +68,7 @@ export async function updateSupplierCategoriesAction(
       }
     }
 
-    await prisma.$transaction(async (tx) => {
+    await firestoreDb.$transaction(async (tx) => {
       await tx.organizationCategory.deleteMany({
         where: { organizationId: session.organizationId },
       });

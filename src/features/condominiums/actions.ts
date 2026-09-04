@@ -1,9 +1,9 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { OrganizationType } from "@prisma/client";
+import { OrganizationType } from "@/lib/domain/types";
 import Papa from "papaparse";
-import { prisma } from "@/lib/prisma";
+import { firestoreDb } from "@/lib/firebase/firestore-db";
 import { requireAuthorizedSession } from "@/lib/auth/guards";
 import { toPublicErrorMessage } from "@/lib/errors";
 import { writeAuditLog } from "@/lib/audit";
@@ -46,7 +46,7 @@ export async function createCondominiumAction(formData: FormData): Promise<Actio
       return { ok: false, message: parsed.error.issues[0]?.message ?? "Dados inválidos" };
     }
 
-    const created = await prisma.condominium.create({
+    const created = await firestoreDb.condominium.create({
       data: {
         organizationId: session.organizationId,
         name: parsed.data.name,
@@ -91,12 +91,12 @@ export async function updateCondominiumAction(formData: FormData): Promise<Actio
       return { ok: false, message: "Dados inválidos" };
     }
 
-    const existing = await prisma.condominium.findFirst({
+    const existing = await firestoreDb.condominium.findFirst({
       where: { id, organizationId: session.organizationId, archivedAt: null },
     });
     if (!existing) return { ok: false, message: "Condomínio não encontrado." };
 
-    await prisma.condominium.update({
+    await firestoreDb.condominium.update({
       where: { id },
       data: {
         name: parsed.data.name,
@@ -127,12 +127,12 @@ export async function archiveCondominiumAction(formData: FormData): Promise<Acti
   try {
     const session = await requireSolicitante();
     const id = String(formData.get("id") ?? "");
-    const existing = await prisma.condominium.findFirst({
+    const existing = await firestoreDb.condominium.findFirst({
       where: { id, organizationId: session.organizationId, archivedAt: null },
     });
     if (!existing) return { ok: false, message: "Condomínio não encontrado." };
 
-    await prisma.condominium.update({
+    await firestoreDb.condominium.update({
       where: { id },
       data: { archivedAt: new Date() },
     });
@@ -200,7 +200,7 @@ export async function importCondominiumsAction(formData: FormData): Promise<Impo
         continue;
       }
 
-      await prisma.condominium.create({
+      await firestoreDb.condominium.create({
         data: {
           organizationId: session.organizationId,
           name,

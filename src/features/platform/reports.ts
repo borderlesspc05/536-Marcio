@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/prisma";
+import { firestoreDb } from "@/lib/firebase/firestore-db";
 import { regionHintFromAddress } from "@/features/opportunities/analysis";
 
 export type PlatformReports = {
@@ -21,14 +21,14 @@ export type PlatformReports = {
 
 export async function getPlatformReports(): Promise<PlatformReports> {
   const [subs, outros, approved, commissionAgg, quotations, invites] = await Promise.all([
-    prisma.subscription.findMany({
+    firestoreDb.subscription.findMany({
       where: { status: "active" },
       include: { plan: true },
     }),
-    prisma.quotation.count({ where: { status: "finalizada_outros" } }),
-    prisma.quotation.count({ where: { status: "aprovada" } }),
-    prisma.commissionEntry.aggregate({ _sum: { volumeCents: true, commissionCents: true } }),
-    prisma.quotation.findMany({
+    firestoreDb.quotation.count({ where: { status: "finalizada_outros" } }),
+    firestoreDb.quotation.count({ where: { status: "aprovada" } }),
+    firestoreDb.commissionEntry.aggregate({ _sum: { volumeCents: true, commissionCents: true } }),
+    firestoreDb.quotation.findMany({
       include: {
         serviceItem: true,
         condominium: true,
@@ -37,7 +37,7 @@ export async function getPlatformReports(): Promise<PlatformReports> {
       take: 500,
       orderBy: { createdAt: "desc" },
     }),
-    prisma.quotationInvite.findMany({
+    firestoreDb.quotationInvite.findMany({
       where: { OR: [{ acceptedAt: { not: null } }, { proposal: { isNot: null } }] },
       include: { proposal: true },
       take: 500,
@@ -56,7 +56,7 @@ export async function getPlatformReports(): Promise<PlatformReports> {
     bySlug.set(sub.plan.slug, current);
   }
 
-  const referredUsers = await prisma.user.findMany({
+  const referredUsers = await firestoreDb.user.findMany({
     where: { referredByUserId: { not: null } },
     select: { id: true },
   });
@@ -64,13 +64,13 @@ export async function getPlatformReports(): Promise<PlatformReports> {
   let referralsActivePaid = 0;
   let referralsFree = 0;
   for (const user of referredUsers) {
-    const memberships = await prisma.organizationMember.findMany({
+    const memberships = await firestoreDb.organizationMember.findMany({
       where: { userId: user.id },
       select: { organizationId: true },
     });
     let paid = false;
     for (const m of memberships) {
-      const sub = await prisma.subscription.findFirst({
+      const sub = await firestoreDb.subscription.findFirst({
         where: { organizationId: m.organizationId, status: "active" },
         include: { plan: true },
       });

@@ -1,4 +1,4 @@
-import { MemberRole, OrganizationType } from "@prisma/client";
+import { MemberRole, OrganizationType } from "@/lib/domain/types";
 import type { PlanFeatureKey, PlanFeatures } from "@/features/billing/plan-gate";
 import {
   Bell,

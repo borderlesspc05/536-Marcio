@@ -20,6 +20,14 @@ export function RegisterForm({
     ? defaultType
     : "sindico";
 
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [organizationType, setOrganizationType] = useState(initialType);
+  const [organizationName, setOrganizationName] = useState("");
+  const [document, setDocument] = useState("");
+  const [privacyAccepted, setPrivacyAccepted] = useState(false);
+
   return (
     <form
       className="space-y-4"
@@ -28,8 +36,8 @@ export function RegisterForm({
           const response = await registerAction(formData);
           setResult(response);
           if (response.ok) {
-            const email = String(formData.get("email") ?? "");
-            const params = new URLSearchParams({ email });
+            const nextEmail = String(formData.get("email") ?? email);
+            const params = new URLSearchParams({ email: nextEmail });
             if (response.devCode) params.set("devCode", response.devCode);
             router.push(`/confirmar?${params.toString()}`);
           }
@@ -45,6 +53,8 @@ export function RegisterForm({
           id="name"
           name="name"
           required
+          value={name}
+          onChange={(event) => setName(event.target.value)}
           className="h-11 w-full rounded-xl border border-black/10 px-3 text-sm outline-none ring-fuchsia-200 focus:ring-2"
         />
       </div>
@@ -58,6 +68,8 @@ export function RegisterForm({
           name="email"
           type="email"
           required
+          value={email}
+          onChange={(event) => setEmail(event.target.value)}
           className="h-11 w-full rounded-xl border border-black/10 px-3 text-sm outline-none ring-fuchsia-200 focus:ring-2"
         />
       </div>
@@ -72,6 +84,8 @@ export function RegisterForm({
           type="password"
           required
           minLength={8}
+          value={password}
+          onChange={(event) => setPassword(event.target.value)}
           className="h-11 w-full rounded-xl border border-black/10 px-3 text-sm outline-none ring-fuchsia-200 focus:ring-2"
           placeholder="Mín. 8 caracteres, 1 maiúscula e 1 número"
         />
@@ -85,8 +99,9 @@ export function RegisterForm({
           id="organizationType"
           name="organizationType"
           required
+          value={organizationType}
+          onChange={(event) => setOrganizationType(event.target.value)}
           className="h-11 w-full rounded-xl border border-black/10 bg-white px-3 text-sm outline-none ring-fuchsia-200 focus:ring-2"
-          defaultValue={initialType}
         >
           <option value="sindico">Síndico (Solicitante)</option>
           <option value="administradora">Administradora (Solicitante)</option>
@@ -102,6 +117,8 @@ export function RegisterForm({
           id="organizationName"
           name="organizationName"
           required
+          value={organizationName}
+          onChange={(event) => setOrganizationName(event.target.value)}
           className="h-11 w-full rounded-xl border border-black/10 px-3 text-sm outline-none ring-fuchsia-200 focus:ring-2"
         />
       </div>
@@ -113,12 +130,21 @@ export function RegisterForm({
         <input
           id="document"
           name="document"
+          value={document}
+          onChange={(event) => setDocument(event.target.value)}
           className="h-11 w-full rounded-xl border border-black/10 px-3 text-sm outline-none ring-fuchsia-200 focus:ring-2"
         />
       </div>
 
       <label className="flex items-start gap-2 text-sm text-neutral-700">
-        <input type="checkbox" name="privacyAccepted" className="mt-1" required />
+        <input
+          type="checkbox"
+          name="privacyAccepted"
+          className="mt-1"
+          required
+          checked={privacyAccepted}
+          onChange={(event) => setPrivacyAccepted(event.target.checked)}
+        />
         <span>
           Li e aceito a política de privacidade (LGPD) e o tratamento dos meus dados para uso da
           plataforma.

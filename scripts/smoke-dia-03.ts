@@ -1,4 +1,4 @@
-import { prisma } from "../src/lib/prisma";
+import { firestoreDb } from "../src/lib/firebase/firestore-db";
 import { markOverdueCompliance } from "../src/features/compliance/expire";
 import {
   consumeSupplierFranchiseInTx,
@@ -8,18 +8,18 @@ import {
 import { currentYearMonth } from "../src/features/quotations/franchise";
 
 async function main() {
-  const supplier = await prisma.organization.findFirst({
+  const supplier = await firestoreDb.organization.findFirst({
     where: { type: "fornecedor" },
   });
   if (!supplier) throw new Error("Org fornecedor ausente");
 
-  const user = await prisma.user.findFirst({
+  const user = await firestoreDb.user.findFirst({
     where: { email: "fornecedor@demo.cotacondo.com.br" },
   });
-  const sindicoUser = await prisma.user.findFirst({
+  const sindicoUser = await firestoreDb.user.findFirst({
     where: { email: "sindico@demo.cotacondo.com.br" },
   });
-  const sindico = await prisma.organization.findFirst({ where: { type: "sindico" } });
+  const sindico = await firestoreDb.organization.findFirst({ where: { type: "sindico" } });
   if (!user || !sindicoUser || !sindico) throw new Error("Usuários/orgs demo ausentes");
 
   const plan = await getSupplierPlanInfo(supplier.id);
@@ -30,7 +30,7 @@ async function main() {
 
   const past = new Date();
   past.setMonth(past.getMonth() - 7);
-  const overdueDoc = await prisma.complianceDocument.create({
+  const overdueDoc = await firestoreDb.complianceDocument.create({
     data: {
       organizationId: supplier.id,
       documentType: "Smoke Certidão",
@@ -41,7 +41,7 @@ async function main() {
     },
   });
   const marked = await markOverdueCompliance(supplier.id);
-  const refreshed = await prisma.complianceDocument.findUniqueOrThrow({
+  const refreshed = await firestoreDb.complianceDocument.findUniqueOrThrow({
     where: { id: overdueDoc.id },
   });
   if (refreshed.status !== "em_atraso") {
@@ -49,21 +49,21 @@ async function main() {
   }
   console.log("Compliance expire OK");
 
-  await prisma.complianceDocument.update({
+  await firestoreDb.complianceDocument.update({
     where: { id: overdueDoc.id },
     data: { status: "aprovado", validUntil: new Date(Date.now() + 180 * 86400000) },
   });
 
   const categoryId = plan.categoryIds[0]!;
-  const service = await prisma.serviceItem.findFirst({
+  const service = await firestoreDb.serviceItem.findFirst({
     where: { categoryId, deletedAt: null, isActive: true },
   });
-  const condo = await prisma.condominium.findFirst({
+  const condo = await firestoreDb.condominium.findFirst({
     where: { organizationId: sindico.id, archivedAt: null },
   });
   if (!service || !condo) throw new Error("Serviço/condomínio ausentes para smoke");
 
-  const quotation = await prisma.quotation.create({
+  const quotation = await firestoreDb.quotation.create({
     data: {
       publicId: `COT-D3-${Date.now()}`,
       organizationId: sindico.id,
@@ -91,7 +91,7 @@ async function main() {
   });
 
   // Segundo invite em outra cotação (mesmo fornecedor) para proposta
-  const quotationPropose = await prisma.quotation.create({
+  const quotationPropose = await firestoreDb.quotation.create({
     data: {
       publicId: `COT-D3P-${Date.now()}`,
       organizationId: sindico.id,
@@ -119,7 +119,7 @@ async function main() {
   });
 
   const inviteToDecline = quotation.invites[0]!;
-  await prisma.quotationInvite.update({
+  await firestoreDb.quotationInvite.update({
     where: { id: inviteToDecline.id },
     data: {
       status: "declinado",
@@ -131,14 +131,14 @@ async function main() {
 
   const inviteToPropose = quotationPropose.invites[0]!;
 
-  await prisma.franchiseUsage.deleteMany({
+  await firestoreDb.franchiseUsage.deleteMany({
     where: { organizationId: supplier.id, yearMonth: currentYearMonth() },
   });
 
   const before = await getSupplierFranchiseBalance(supplier.id);
   console.log("Franquia fornecedor antes:", before);
 
-  const proposal = await prisma.$transaction(async (tx) => {
+  const proposal = await firestoreDb.$transaction(async (tx) => {
     await consumeSupplierFranchiseInTx(tx, supplier.id);
     await tx.quotationInvite.update({
       where: { id: inviteToPropose.id },
@@ -200,7 +200,7 @@ async function main() {
   }
   console.log("Trava plano Free OK:", after);
 
-  const proposalsOnQuotation = await prisma.proposal.count({
+  const proposalsOnQuotation = await firestoreDb.proposal.count({
     where: { quotationId: inviteToPropose.quotationId },
   });
   if (proposalsOnQuotation < 1) {
@@ -217,5 +217,5 @@ main()
     process.exit(1);
   })
   .finally(async () => {
-    await prisma.$disconnect();
+    await firestoreDb.$disconnect();
   });

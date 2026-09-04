@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/prisma";
+import { firestoreDb } from "@/lib/firebase/firestore-db";
 import { currentYearMonth } from "@/features/quotations/franchise";
 import { writeAuditLog } from "@/lib/audit";
 
@@ -40,7 +40,7 @@ export async function runDistributionEngine(quotationId: string): Promise<Distri
     return result;
   }
 
-  const quotation = await prisma.quotation.findUnique({
+  const quotation = await firestoreDb.quotation.findUnique({
     where: { id: quotationId },
     include: {
       organization: true,
@@ -72,7 +72,7 @@ export async function runDistributionEngine(quotationId: string): Promise<Distri
   }
 
   const yearMonth = currentYearMonth();
-  const suppliers = await prisma.organization.findMany({
+  const suppliers = await firestoreDb.organization.findMany({
     where: { type: "fornecedor" },
     include: {
       subscriptions: {
@@ -195,7 +195,7 @@ export async function runDistributionEngine(quotationId: string): Promise<Distri
   ].slice(0, slots);
 
   for (const candidate of ordered) {
-    await prisma.quotationInvite.create({
+    await firestoreDb.quotationInvite.create({
       data: {
         quotationId: quotation.id,
         supplierOrgId: candidate.supplierOrgId,
@@ -229,7 +229,7 @@ export async function runDistributionEngine(quotationId: string): Promise<Distri
     }
   }
 
-  await prisma.domainEvent.create({
+  await firestoreDb.domainEvent.create({
     data: {
       type: "distribution.completed",
       entityType: "quotation",
@@ -246,16 +246,16 @@ export async function runDistributionEngine(quotationId: string): Promise<Distri
 }
 
 export async function pauseQuotationInvitesIfMaxReached(quotationId: string): Promise<boolean> {
-  const quotation = await prisma.quotation.findUnique({ where: { id: quotationId } });
+  const quotation = await firestoreDb.quotation.findUnique({ where: { id: quotationId } });
   if (!quotation) return false;
   if (quotation.proposalsCount < quotation.maxProposals) return false;
 
-  await prisma.quotation.update({
+  await firestoreDb.quotation.update({
     where: { id: quotationId },
     data: { invitesPaused: true },
   });
 
-  await prisma.domainEvent.create({
+  await firestoreDb.domainEvent.create({
     data: {
       type: "quotation.max_proposals_reached",
       entityType: "quotation",
@@ -272,16 +272,16 @@ export async function pauseQuotationInvitesIfMaxReached(quotationId: string): Pr
 }
 
 export async function emitMinProposalsIfReached(quotationId: string): Promise<boolean> {
-  const quotation = await prisma.quotation.findUnique({ where: { id: quotationId } });
+  const quotation = await firestoreDb.quotation.findUnique({ where: { id: quotationId } });
   if (!quotation) return false;
   if (quotation.proposalsCount < quotation.minProposals) return false;
 
-  const already = await prisma.domainEvent.findFirst({
+  const already = await firestoreDb.domainEvent.findFirst({
     where: { entityId: quotationId, type: "quotation.min_proposals_reached" },
   });
   if (already) return false;
 
-  await prisma.domainEvent.create({
+  await firestoreDb.domainEvent.create({
     data: {
       type: "quotation.min_proposals_reached",
       entityType: "quotation",

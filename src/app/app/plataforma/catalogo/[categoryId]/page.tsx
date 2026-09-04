@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireAuthorizedSession } from "@/lib/auth/guards";
-import { prisma } from "@/lib/prisma";
+import { firestoreDb } from "@/lib/firebase/firestore-db";
 import { Button } from "@/components/ui/Button";
 import {
   createServiceItemAction,
@@ -15,7 +15,7 @@ export default async function CategoryDetailPage({ params }: PageProps) {
   await requireAuthorizedSession({ href: "/app/plataforma/catalogo" });
   const { categoryId } = await params;
 
-  const category = await prisma.serviceCategory.findFirst({
+  const category = await firestoreDb.serviceCategory.findFirst({
     where: { id: categoryId, deletedAt: null },
     include: {
       items: {

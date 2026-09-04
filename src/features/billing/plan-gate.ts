@@ -1,6 +1,6 @@
 import { cache } from "react";
-import type { OrganizationType } from "@prisma/client";
-import { prisma } from "@/lib/prisma";
+import type { OrganizationType } from "@/lib/domain/types";
+import { firestoreDb } from "@/lib/firebase/firestore-db";
 import { getPlanSlugsForOrganization } from "@/features/billing/plan-catalog";
 
 export type PlanFeatureKey =
@@ -44,17 +44,17 @@ export function parsePlanFeatures(json: string | null | undefined): PlanFeatures
 
 export const getPlanGate = cache(async (organizationId: string): Promise<PlanGateContext | null> => {
   const [activeSubscription, pendingSubscription, override] = await Promise.all([
-    prisma.subscription.findFirst({
+    firestoreDb.subscription.findFirst({
       where: { organizationId, status: { in: ["active", "past_due"] } },
       include: { plan: true, pendingPlan: true },
       orderBy: { createdAt: "desc" },
     }),
-    prisma.subscription.findFirst({
+    firestoreDb.subscription.findFirst({
       where: { organizationId, status: "pending" },
       include: { plan: true, pendingPlan: true },
       orderBy: { createdAt: "desc" },
     }),
-    prisma.planOverride.findUnique({ where: { organizationId } }),
+    firestoreDb.planOverride.findUnique({ where: { organizationId } }),
   ]);
 
   const subscription = activeSubscription ?? pendingSubscription;
@@ -94,7 +94,7 @@ export function getCategoriesIncluded(gate: PlanGateContext | null): number {
 }
 
 export async function listActivePlans(audience?: "solicitante" | "fornecedor") {
-  return prisma.plan.findMany({
+  return firestoreDb.plan.findMany({
     where: {
       isActive: true,
       ...(audience ? { audience } : { audience: { in: ["solicitante", "fornecedor"] } }),
@@ -106,7 +106,7 @@ export async function listActivePlans(audience?: "solicitante" | "fornecedor") {
 export async function listActivePlansForOrganization(organizationType: OrganizationType) {
   const slugs = getPlanSlugsForOrganization(organizationType);
   if (slugs.length === 0) return [];
-  return prisma.plan.findMany({
+  return firestoreDb.plan.findMany({
     where: { isActive: true, slug: { in: [...slugs] } },
     orderBy: [{ sortOrder: "asc" }, { priceCents: "asc" }],
   });

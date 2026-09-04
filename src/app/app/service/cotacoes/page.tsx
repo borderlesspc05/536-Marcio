@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { OrganizationType } from "@prisma/client";
+import { OrganizationType } from "@/lib/domain/types";
 import { requireAuthorizedSession } from "@/lib/auth/guards";
 import { getServicePipelineCounts, listServiceQuotations } from "@/features/master-service/data";
 import {

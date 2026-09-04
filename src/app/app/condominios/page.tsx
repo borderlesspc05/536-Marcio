@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { requireAuthorizedSession } from "@/lib/auth/guards";
-import { prisma } from "@/lib/prisma";
+import { firestoreDb } from "@/lib/firebase/firestore-db";
 import { CondominiumsClient } from "@/features/condominiums/components/CondominiumsClient";
 
 type PageProps = { searchParams: Promise<{ q?: string }> };
@@ -10,7 +10,7 @@ export default async function CondominiosPage({ searchParams }: PageProps) {
   const { q } = await searchParams;
   const query = q?.trim();
 
-  const condominiums = await prisma.condominium.findMany({
+  const condominiums = await firestoreDb.condominium.findMany({
     where: {
       organizationId: session.organizationId,
       archivedAt: null,

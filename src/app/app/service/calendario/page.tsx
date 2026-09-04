@@ -1,4 +1,4 @@
-import { OrganizationType } from "@prisma/client";
+import { OrganizationType } from "@/lib/domain/types";
 import { renderCalendarPage } from "@/features/appointments/calendar-page";
 import { requireAuthorizedSession } from "@/lib/auth/guards";
 

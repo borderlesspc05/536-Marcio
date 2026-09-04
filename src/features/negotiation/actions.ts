@@ -1,8 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { OrganizationType, SupplierPipelineStage } from "@prisma/client";
-import { prisma } from "@/lib/prisma";
+import { OrganizationType, SupplierPipelineStage } from "@/lib/domain/types";
+import { firestoreDb } from "@/lib/firebase/firestore-db";
 import { requireAuthorizedSession } from "@/lib/auth/guards";
 import { toPublicErrorMessage } from "@/lib/errors";
 import { writeAuditLog } from "@/lib/audit";
@@ -34,7 +34,7 @@ export async function startNegotiationAction(formData: FormData): Promise<Action
       return { ok: false, message: parsed.error.issues[0]?.message ?? "Dados inválidos" };
     }
 
-    const proposals = await prisma.proposal.findMany({
+    const proposals = await firestoreDb.proposal.findMany({
       where: {
         id: { in: parsed.data.proposalIds },
         quotation: { organizationId: session.organizationId },
@@ -47,7 +47,7 @@ export async function startNegotiationAction(formData: FormData): Promise<Action
 
     const quotationId = proposals[0]!.quotationId;
 
-    await prisma.$transaction(async (tx) => {
+    await firestoreDb.$transaction(async (tx) => {
       await tx.quotation.update({
         where: { id: quotationId },
         data: { status: "em_negociacao" },
@@ -125,7 +125,7 @@ export async function sendNegotiationMessageAction(formData: FormData): Promise<
       return { ok: false, message: parsed.error.issues[0]?.message ?? "Dados inválidos" };
     }
 
-    const proposal = await prisma.proposal.findUnique({
+    const proposal = await firestoreDb.proposal.findUnique({
       where: { id: parsed.data.proposalId },
       include: { quotation: true },
     });
@@ -152,7 +152,7 @@ export async function sendNegotiationMessageAction(formData: FormData): Promise<
       return { ok: false, message: "Proposta não está em negociação." };
     }
 
-    await prisma.negotiationMessage.create({
+    await firestoreDb.negotiationMessage.create({
       data: {
         proposalId: proposal.id,
         organizationId: session.organizationId,
@@ -161,7 +161,7 @@ export async function sendNegotiationMessageAction(formData: FormData): Promise<
       },
     });
 
-    await prisma.domainEvent.create({
+    await firestoreDb.domainEvent.create({
       data: {
         type: "negotiation.message",
         entityType: "proposal",
@@ -189,7 +189,7 @@ export async function approveConditionAction(formData: FormData): Promise<Action
       return { ok: false, message: "Selecione uma condição válida." };
     }
 
-    const proposal = await prisma.proposal.findFirst({
+    const proposal = await firestoreDb.proposal.findFirst({
       where: {
         id: parsed.data.proposalId,
         quotation: { organizationId: session.organizationId },
@@ -207,7 +207,7 @@ export async function approveConditionAction(formData: FormData): Promise<Action
     const condition = proposal.conditions.find((item) => item.id === parsed.data.conditionId);
     if (!condition) return { ok: false, message: "Condição inválida." };
 
-    await prisma.$transaction(async (tx) => {
+    await firestoreDb.$transaction(async (tx) => {
       await tx.proposal.update({
         where: { id: proposal.id },
         data: { status: "aprovada" },
@@ -321,7 +321,7 @@ export async function approveOthersAction(formData: FormData): Promise<ActionRes
       return { ok: false, message: parsed.error.issues[0]?.message ?? "Dados inválidos" };
     }
 
-    const quotation = await prisma.quotation.findFirst({
+    const quotation = await firestoreDb.quotation.findFirst({
       where: { id: parsed.data.quotationId, organizationId: session.organizationId },
     });
     if (!quotation) return { ok: false, message: "Cotação não encontrada." };
@@ -331,7 +331,7 @@ export async function approveOthersAction(formData: FormData): Promise<ActionRes
 
     const amountCents = Math.round(parsed.data.finalAmount * 100);
 
-    await prisma.$transaction(async (tx) => {
+    await firestoreDb.$transaction(async (tx) => {
       await tx.proposal.updateMany({
         where: {
           quotationId: quotation.id,
@@ -430,7 +430,7 @@ export async function updateProposalDuringNegotiationAction(
       return { ok: false, message: parsed.error.issues[0]?.message ?? "Dados inválidos" };
     }
 
-    const proposal = await prisma.proposal.findFirst({
+    const proposal = await firestoreDb.proposal.findFirst({
       where: {
         id: parsed.data.proposalId,
         organizationId: session.organizationId,
@@ -439,7 +439,7 @@ export async function updateProposalDuringNegotiationAction(
     });
     if (!proposal) return { ok: false, message: "Proposta em negociação não encontrada." };
 
-    await prisma.$transaction(async (tx) => {
+    await firestoreDb.$transaction(async (tx) => {
       await tx.proposalConditionAttachment.deleteMany({
         where: { condition: { proposalId: proposal.id } },
       });
@@ -478,7 +478,7 @@ export async function reinforceInviteAction(formData: FormData): Promise<ActionR
     const inviteId = String(formData.get("inviteId") ?? "");
     if (!inviteId) return { ok: false, message: "Convite inválido." };
 
-    const invite = await prisma.quotationInvite.findFirst({
+    const invite = await firestoreDb.quotationInvite.findFirst({
       where: {
         id: inviteId,
         quotation: { organizationId: session.organizationId },
@@ -514,7 +514,7 @@ export async function reinforceInviteAction(formData: FormData): Promise<ActionR
       });
     }
 
-    await prisma.domainEvent.create({
+    await firestoreDb.domainEvent.create({
       data: {
         type: "invite.reinforced",
         entityType: "quotation_invite",

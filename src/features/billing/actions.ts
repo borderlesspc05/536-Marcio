@@ -1,8 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { OrganizationType } from "@prisma/client";
-import { prisma } from "@/lib/prisma";
+import { OrganizationType } from "@/lib/domain/types";
+import { firestoreDb } from "@/lib/firebase/firestore-db";
 import { requireAuthorizedSession } from "@/lib/auth/guards";
 import { getSession } from "@/lib/auth/session";
 import { toPublicErrorMessage } from "@/lib/errors";
@@ -84,7 +84,7 @@ export async function confirmSandboxPaymentAction(formData: FormData): Promise<A
     const checkoutId = String(formData.get("checkoutId") ?? "");
     if (!checkoutId) return { ok: false, message: "Checkout inválido." };
 
-    const checkout = await prisma.paymentCheckout.findUnique({ where: { id: checkoutId } });
+    const checkout = await firestoreDb.paymentCheckout.findUnique({ where: { id: checkoutId } });
     if (!checkout) return { ok: false, message: "Checkout não encontrado." };
     if (session && checkout.organizationId !== session.organizationId) {
       return { ok: false, message: "Checkout de outra organização." };

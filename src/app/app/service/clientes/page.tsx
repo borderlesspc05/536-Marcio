@@ -1,9 +1,9 @@
 import Link from "next/link";
-import { OrganizationType } from "@prisma/client";
+import { OrganizationType } from "@/lib/domain/types";
 import { requireAuthorizedSession } from "@/lib/auth/guards";
 import { listServiceClients } from "@/features/master-service/data";
 import { createServiceClientAction } from "@/features/master-service/actions";
-import { prisma } from "@/lib/prisma";
+import { firestoreDb } from "@/lib/firebase/firestore-db";
 import { formAction } from "@/lib/form-action";
 import { Button } from "@/components/ui/Button";
 
@@ -15,7 +15,7 @@ export default async function ServiceClientesPage() {
 
   const [clients, candidateOrgs] = await Promise.all([
     listServiceClients(session.organizationId),
-    prisma.organization.findMany({
+    firestoreDb.organization.findMany({
       where: {
         type: { in: [OrganizationType.administradora, OrganizationType.sindico] },
         serviceClientProfile: null,

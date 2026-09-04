@@ -6,9 +6,9 @@ import {
   MemberRole,
   ServicePipelineStatus,
   SupplierPipelineStage,
-} from "@prisma/client";
+} from "@/lib/domain/types";
 import { revalidatePath } from "next/cache";
-import { prisma } from "@/lib/prisma";
+import { firestoreDb } from "@/lib/firebase/firestore-db";
 import { writeAuditLog } from "@/lib/audit";
 import { getRequestIp } from "@/lib/request-ip";
 import { emitDomainEvent } from "@/lib/domain-events";
@@ -68,7 +68,7 @@ export async function externalApproveQuotationAction(formData: FormData): Promis
 
     const ip = await getRequestIp();
 
-    await prisma.$transaction(async (tx) => {
+    await firestoreDb.$transaction(async (tx) => {
       const approval = await tx.quotationExternalApproval.create({
         data: {
           quotationId,
@@ -184,7 +184,7 @@ export async function externalRejectQuotationAction(formData: FormData): Promise
 
     const ip = await getRequestIp();
 
-    await prisma.$transaction(async (tx) => {
+    await firestoreDb.$transaction(async (tx) => {
       await tx.quotationExternalApproval.create({
         data: {
           quotationId,
@@ -246,7 +246,7 @@ export async function inviteExternalApproverAction(formData: FormData): Promise<
       return { ok: false, message: "Selecione ao menos um condomínio." };
     }
 
-    const condos = await prisma.condominium.findMany({
+    const condos = await firestoreDb.condominium.findMany({
       where: {
         id: { in: condominiumIds },
         organizationId: session.organizationId,
@@ -257,17 +257,17 @@ export async function inviteExternalApproverAction(formData: FormData): Promise<
       return { ok: false, message: "Condomínios inválidos." };
     }
 
-    const serviceClient = await prisma.serviceClient.findUnique({
+    const serviceClient = await firestoreDb.serviceClient.findUnique({
       where: { clientOrgId: session.organizationId },
     });
 
     const { randomBytes } = await import("crypto");
     const { hashPassword } = await import("@/lib/auth/password");
 
-    let user = await prisma.user.findUnique({ where: { email } });
+    let user = await firestoreDb.user.findUnique({ where: { email } });
     if (!user) {
       const tempPassword = `Aprovador@${randomBytes(3).toString("hex")}`;
-      user = await prisma.user.create({
+      user = await firestoreDb.user.create({
         data: {
           email,
           name,
@@ -278,7 +278,7 @@ export async function inviteExternalApproverAction(formData: FormData): Promise<
       });
     }
 
-    await prisma.organizationMember.upsert({
+    await firestoreDb.organizationMember.upsert({
       where: {
         userId_organizationId: {
           userId: user.id,
@@ -294,7 +294,7 @@ export async function inviteExternalApproverAction(formData: FormData): Promise<
     });
 
     for (const condominiumId of condominiumIds) {
-      await prisma.externalApproverScope.upsert({
+      await firestoreDb.externalApproverScope.upsert({
         where: { userId_condominiumId: { userId: user.id, condominiumId } },
         update: {
           organizationId: session.organizationId,
@@ -324,9 +324,130 @@ export async function inviteExternalApproverAction(formData: FormData): Promise<
   }
 }
 
+export async function updateExternalApproverScopesAction(formData: FormData): Promise<ActionResult> {
+  try {
+    const session = await requireAuthorizedSessionForInvite();
+    const userId = String(formData.get("userId") ?? "").trim();
+    const condominiumIds = formData.getAll("condominiumIds").map(String);
+
+    if (!userId) return { ok: false, message: "Usuário inválido." };
+    if (condominiumIds.length === 0) {
+      return { ok: false, message: "Selecione ao menos um condomínio." };
+    }
+
+    const membership = await firestoreDb.organizationMember.findUnique({
+      where: {
+        userId_organizationId: {
+          userId,
+          organizationId: session.organizationId,
+        },
+      },
+    });
+    if (!membership || membership.role !== MemberRole.external_approver) {
+      return { ok: false, message: "Aprovador externo não encontrado." };
+    }
+
+    const condos = await firestoreDb.condominium.findMany({
+      where: {
+        id: { in: condominiumIds },
+        organizationId: session.organizationId,
+        archivedAt: null,
+      },
+    });
+    if (condos.length !== condominiumIds.length) {
+      return { ok: false, message: "Condomínios inválidos." };
+    }
+
+    const serviceClient = await firestoreDb.serviceClient.findUnique({
+      where: { clientOrgId: session.organizationId },
+    });
+
+    const existing = await firestoreDb.externalApproverScope.findMany({
+      where: { userId, organizationId: session.organizationId },
+    });
+
+    const keep = new Set(condominiumIds);
+    for (const scope of existing) {
+      if (!keep.has(scope.condominiumId)) {
+        await firestoreDb.externalApproverScope.delete({ where: { id: scope.id } });
+      }
+    }
+
+    for (const condominiumId of condominiumIds) {
+      await firestoreDb.externalApproverScope.upsert({
+        where: { userId_condominiumId: { userId, condominiumId } },
+        update: {
+          organizationId: session.organizationId,
+          serviceClientId: serviceClient?.id ?? null,
+        },
+        create: {
+          userId,
+          organizationId: session.organizationId,
+          condominiumId,
+          serviceClientId: serviceClient?.id ?? null,
+        },
+      });
+    }
+
+    await writeAuditLog({
+      userId: session.userId,
+      action: "external_approver.scopes_updated",
+      entityType: "User",
+      entityId: userId,
+      metadata: { condominiumIds },
+    });
+
+    revalidatePath("/app/equipe");
+    return { ok: true, message: "Vínculos atualizados." };
+  } catch (error) {
+    return { ok: false, message: toPublicErrorMessage(error) };
+  }
+}
+
+export async function removeExternalApproverAction(formData: FormData): Promise<ActionResult> {
+  try {
+    const session = await requireAuthorizedSessionForInvite();
+    const userId = String(formData.get("userId") ?? "").trim();
+    if (!userId) return { ok: false, message: "Usuário inválido." };
+
+    const membership = await firestoreDb.organizationMember.findUnique({
+      where: {
+        userId_organizationId: {
+          userId,
+          organizationId: session.organizationId,
+        },
+      },
+    });
+    if (!membership || membership.role !== MemberRole.external_approver) {
+      return { ok: false, message: "Aprovador externo não encontrado." };
+    }
+
+    const scopes = await firestoreDb.externalApproverScope.findMany({
+      where: { userId, organizationId: session.organizationId },
+    });
+    for (const scope of scopes) {
+      await firestoreDb.externalApproverScope.delete({ where: { id: scope.id } });
+    }
+
+    await firestoreDb.organizationMember.delete({ where: { id: membership.id } });
+
+    await writeAuditLog({
+      userId: session.userId,
+      action: "external_approver.removed",
+      entityType: "User",
+      entityId: userId,
+    });
+
+    revalidatePath("/app/equipe");
+    return { ok: true, message: "Aprovador removido." };
+  } catch (error) {
+    return { ok: false, message: toPublicErrorMessage(error) };
+  }
+}
+
 async function requireAuthorizedSessionForInvite() {
   const { requireAuthorizedSession } = await import("@/lib/auth/guards");
-  const { OrganizationType } = await import("@prisma/client");
+  const { OrganizationType } = await import("@/lib/domain/types");
   return requireAuthorizedSession({
     types: [OrganizationType.administradora],
     roles: [MemberRole.master],

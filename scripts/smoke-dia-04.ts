@@ -1,4 +1,4 @@
-import { prisma } from "../src/lib/prisma";
+import { firestoreDb } from "../src/lib/firebase/firestore-db";
 import {
   DISTRIBUTION_TIERS,
   runDistributionEngine,
@@ -7,23 +7,23 @@ import {
 } from "../src/features/distribution/engine";
 
 async function main() {
-  const sindico = await prisma.organization.findFirst({ where: { type: "sindico" } });
-  const adm = await prisma.organization.findFirst({ where: { type: "administradora" } });
-  const user = await prisma.user.findFirst({ where: { email: "sindico@demo.cotacondo.com.br" } });
+  const sindico = await firestoreDb.organization.findFirst({ where: { type: "sindico" } });
+  const adm = await firestoreDb.organization.findFirst({ where: { type: "administradora" } });
+  const user = await firestoreDb.user.findFirst({ where: { email: "sindico@demo.cotacondo.com.br" } });
   if (!sindico || !user) throw new Error("Seed base ausente");
 
-  const category = await prisma.serviceCategory.findFirst({
+  const category = await firestoreDb.serviceCategory.findFirst({
     where: { slug: "seguros", deletedAt: null },
   });
-  const service = await prisma.serviceItem.findFirst({
+  const service = await firestoreDb.serviceItem.findFirst({
     where: { categoryId: category!.id, deletedAt: null },
   });
-  const condo = await prisma.condominium.findFirst({
+  const condo = await firestoreDb.condominium.findFirst({
     where: { organizationId: sindico.id, archivedAt: null },
   });
   if (!category || !service || !condo) throw new Error("Categoria/serviço/condo ausentes");
 
-  const quotation = await prisma.quotation.create({
+  const quotation = await firestoreDb.quotation.create({
     data: {
       publicId: `COT-D4-${Date.now()}`,
       organizationId: sindico.id,
@@ -55,13 +55,13 @@ async function main() {
   console.log("Ordem de prioridade OK");
 
   // Simula propostas até a máxima
-  const invites = await prisma.quotationInvite.findMany({
+  const invites = await firestoreDb.quotationInvite.findMany({
     where: { quotationId: quotation.id },
     take: 2,
   });
 
   for (const invite of invites) {
-    await prisma.$transaction(async (tx) => {
+    await firestoreDb.$transaction(async (tx) => {
       await tx.quotationInvite.update({
         where: { id: invite.id },
         data: { status: "aceito", acceptedAt: new Date() },
@@ -94,20 +94,20 @@ async function main() {
   const paused = await pauseQuotationInvitesIfMaxReached(quotation.id);
   if (!paused) throw new Error("Meta máxima deveria pausar convites");
 
-  const refreshed = await prisma.quotation.findUniqueOrThrow({ where: { id: quotation.id } });
+  const refreshed = await firestoreDb.quotation.findUniqueOrThrow({ where: { id: quotation.id } });
   if (!refreshed.invitesPaused || refreshed.proposalsCount < refreshed.maxProposals) {
     throw new Error("Cotação deveria estar pausada na meta máxima");
   }
   console.log("Meta máxima / pause OK");
 
-  const proposals = await prisma.proposal.findMany({
+  const proposals = await firestoreDb.proposal.findMany({
     where: { quotationId: quotation.id },
     include: { conditions: true },
   });
   const winner = proposals[0]!;
   const condition = winner.conditions[0]!;
 
-  await prisma.$transaction(async (tx) => {
+  await firestoreDb.$transaction(async (tx) => {
     await tx.proposal.update({ where: { id: winner.id }, data: { status: "aprovada" } });
     await tx.proposal.updateMany({
       where: { quotationId: quotation.id, id: { not: winner.id } },
@@ -123,7 +123,7 @@ async function main() {
     });
   });
 
-  const afterApprove = await prisma.proposal.findMany({ where: { quotationId: quotation.id } });
+  const afterApprove = await firestoreDb.proposal.findMany({ where: { quotationId: quotation.id } });
   const approved = afterApprove.filter((item) => item.status === "aprovada");
   const rejected = afterApprove.filter((item) => item.status === "recusada");
   if (approved.length !== 1 || rejected.length !== afterApprove.length - 1) {
@@ -132,7 +132,7 @@ async function main() {
   console.log("Aprovar / rejeitar demais OK");
 
   // Outros em cotação separada
-  const quotationOthers = await prisma.quotation.create({
+  const quotationOthers = await firestoreDb.quotation.create({
     data: {
       publicId: `COT-D4-OUT-${Date.now()}`,
       organizationId: sindico.id,
@@ -147,7 +147,7 @@ async function main() {
       createdByUserId: user.id,
     },
   });
-  await prisma.quotation.update({
+  await firestoreDb.quotation.update({
     where: { id: quotationOthers.id },
     data: {
       status: "finalizada_outros",
@@ -156,14 +156,14 @@ async function main() {
       otherFinalAmountCents: 250000,
     },
   });
-  const others = await prisma.quotation.findUniqueOrThrow({ where: { id: quotationOthers.id } });
+  const others = await firestoreDb.quotation.findUniqueOrThrow({ where: { id: quotationOthers.id } });
   if (!others.otherCompanyName || !others.otherFinalAmountCents) {
     throw new Error("Outros deveria persistir empresa e valor");
   }
   console.log("Fluxo Outros OK");
 
   if (adm) {
-    const favorite = await prisma.favoriteSupplier.findFirst({
+    const favorite = await firestoreDb.favoriteSupplier.findFirst({
       where: { organizationId: adm.id },
     });
     if (!favorite) {
@@ -183,5 +183,5 @@ main()
     process.exit(1);
   })
   .finally(async () => {
-    await prisma.$disconnect();
+    await firestoreDb.$disconnect();
   });

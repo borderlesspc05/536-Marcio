@@ -27,6 +27,7 @@ export type SupplierKanbanCard = {
   urgency: string;
   createdAt: string;
   proposalValue: string | null;
+  proposalValueCents: number | null;
   officialStatus: string;
   stage: SupplierPipelineStageValue;
 };
@@ -127,6 +128,10 @@ export function SupplierKanbanBoard({ initialCards }: SupplierKanbanBoardProps) 
         {SUPPLIER_PIPELINE_STAGES.map((stage) => {
           const meta = SUPPLIER_PIPELINE_META[stage];
           const stageCards = cards.filter((card) => card.stage === stage);
+          const stageTotalCents = stageCards.reduce(
+            (sum, card) => sum + (card.proposalValueCents ?? 0),
+            0,
+          );
 
           return (
             <div
@@ -149,6 +154,15 @@ export function SupplierKanbanBoard({ initialCards }: SupplierKanbanBoardProps) 
                   <div>
                     <h2 className="text-sm font-bold text-neutral-900">{meta.label}</h2>
                     <p className="mt-0.5 text-[11px] text-neutral-500">{meta.description}</p>
+                    {stageTotalCents > 0 ? (
+                      <p className="mt-1 text-[11px] font-semibold text-[#087F8C]">
+                        Total etapa:{" "}
+                        {(stageTotalCents / 100).toLocaleString("pt-BR", {
+                          style: "currency",
+                          currency: "BRL",
+                        })}
+                      </p>
+                    ) : null}
                   </div>
                 </div>
                 <span className="rounded-lg bg-white/80 px-2 py-1 text-xs font-bold text-neutral-600 shadow-sm">

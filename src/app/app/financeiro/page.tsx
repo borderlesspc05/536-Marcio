@@ -1,11 +1,12 @@
 import Link from "next/link";
-import { MemberRole, OrganizationType } from "@prisma/client";
+import { MemberRole, OrganizationType } from "@/lib/domain/types";
 import { Handshake, Receipt, TrendingUp, Wallet } from "lucide-react";
 import { requireAuthorizedSession } from "@/lib/auth/guards";
-import { prisma } from "@/lib/prisma";
+import { firestoreDb } from "@/lib/firebase/firestore-db";
 import { can, getPlanGate, formatPriceCents } from "@/features/billing/plan-gate";
 import {
   createCommissionAgreementFormAction,
+  deleteCommissionAgreementFormAction,
   updateCommissionAgreementFormAction,
 } from "@/features/commissions/actions";
 import { ActionForm } from "@/components/ui/ActionForm";
@@ -95,12 +96,12 @@ export default async function FinanceiroPage({ searchParams }: PageProps) {
   const yearMonth = filters.yearMonth?.trim() || currentYearMonth();
 
   const [agreements, entries, partners, categories] = await Promise.all([
-    prisma.commissionAgreement.findMany({
+    firestoreDb.commissionAgreement.findMany({
       where: { administradoraOrgId: session.organizationId },
       include: { supplier: true },
       orderBy: { createdAt: "desc" },
     }),
-    prisma.commissionEntry.findMany({
+    firestoreDb.commissionEntry.findMany({
       where: {
         administradoraOrgId: session.organizationId,
         yearMonth,
@@ -110,18 +111,20 @@ export default async function FinanceiroPage({ searchParams }: PageProps) {
       include: { supplier: true },
       orderBy: { createdAt: "desc" },
     }),
-    prisma.partnership.findMany({
+    firestoreDb.partnership.findMany({
       where: { administradoraOrgId: session.organizationId, status: "active" },
       include: { supplier: true },
     }),
-    prisma.serviceCategory.findMany({
+    firestoreDb.serviceCategory.findMany({
       where: { deletedAt: null, isActive: true },
       orderBy: { sortOrder: "asc" },
       select: { id: true, name: true },
     }),
   ]);
 
-  const categoryNames = new Map(categories.map((item) => [item.id, item.name]));
+  const categoryNames = new Map<string, string>(
+    categories.map((item) => [item.id, item.name]),
+  );
   const totalExpected = entries
     .filter((item) => item.status !== "canceled")
     .reduce((sum, item) => sum + item.commissionCents, 0);
@@ -368,10 +371,13 @@ export default async function FinanceiroPage({ searchParams }: PageProps) {
               </p>
             ) : (
               agreements.map((item) => (
-                <ActionForm
+                <div
                   key={item.id}
+                  className="space-y-2 rounded-2xl border border-black/5 p-3"
+                >
+                <ActionForm
                   action={updateCommissionAgreementFormAction}
-                  className="grid gap-2 rounded-2xl border border-black/5 p-3 md:grid-cols-[1.2fr_0.7fr_0.7fr]"
+                  className="grid gap-2 md:grid-cols-[1.2fr_0.7fr_0.7fr]"
                   submitLabel="Salvar"
                   pendingLabel="Salvando..."
                   size="sm"
@@ -404,6 +410,17 @@ export default async function FinanceiroPage({ searchParams }: PageProps) {
                     className="h-10 rounded-xl border border-black/10 px-2 text-sm"
                   />
                 </ActionForm>
+                <ActionForm
+                  action={deleteCommissionAgreementFormAction}
+                  className="flex justify-end"
+                  submitLabel="Excluir acordo"
+                  pendingLabel="Excluindo..."
+                  size="sm"
+                  variant="secondary"
+                >
+                  <input type="hidden" name="id" value={item.id} />
+                </ActionForm>
+                </div>
               ))
             )}
           </div>

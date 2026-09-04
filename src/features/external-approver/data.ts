@@ -1,5 +1,5 @@
-import { prisma } from "@/lib/prisma";
-import type { ServicePipelineStatus } from "@prisma/client";
+import { firestoreDb } from "@/lib/firebase/firestore-db";
+import type { ServicePipelineStatus } from "@/lib/domain/types";
 import { getExternalApproverCondominiumIds } from "@/features/external-approver/guards";
 
 export type ExternalQuotationTab = "pendentes" | "aprovadas" | "recusadas";
@@ -46,7 +46,7 @@ export async function listExternalApproverQuotations(input: {
             ],
           };
 
-  return prisma.quotation.findMany({
+  return firestoreDb.quotation.findMany({
     where,
     include: {
       condominium: true,
@@ -78,7 +78,7 @@ export async function getExternalApproverQuotation(input: {
   );
   if (condominiumIds.length === 0) return null;
 
-  return prisma.quotation.findFirst({
+  return firestoreDb.quotation.findFirst({
     where: {
       id: input.quotationId,
       organizationId: input.organizationId,
@@ -106,7 +106,7 @@ export async function getExternalApproverQuotation(input: {
 }
 
 export async function getServiceClientBySlug(slug: string) {
-  return prisma.serviceClient.findFirst({
+  return firestoreDb.serviceClient.findFirst({
     where: { solicitationLinkSlug: slug, solicitationLinkActive: true, isActive: true },
     include: {
       clientOrg: true,

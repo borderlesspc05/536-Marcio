@@ -1,8 +1,8 @@
 "use server";
 
-import { MemberRole, OrganizationType } from "@prisma/client";
+import { MemberRole, OrganizationType } from "@/lib/domain/types";
 import { redirect } from "next/navigation";
-import { prisma } from "@/lib/prisma";
+import { firestoreDb } from "@/lib/firebase/firestore-db";
 import { AppError, toPublicErrorMessage } from "@/lib/errors";
 import { writeAuditLog } from "@/lib/audit";
 import {
@@ -73,7 +73,7 @@ export async function registerAction(formData: FormData): Promise<ActionResult> 
 
     const data = parsed.data;
     const email = data.email.toLowerCase();
-    const existing = await prisma.user.findUnique({ where: { email } });
+    const existing = await firestoreDb.user.findUnique({ where: { email } });
     if (existing) {
       return { ok: false, message: "Já existe uma conta com este e-mail." };
     }
@@ -90,10 +90,10 @@ export async function registerAction(formData: FormData): Promise<ActionResult> 
     const organizationType = data.organizationType as OrganizationType;
     const referralCode = String(formData.get("referralCode") || "").trim();
     const referrer = referralCode
-      ? await prisma.user.findUnique({ where: { referralCode } })
+      ? await firestoreDb.user.findUnique({ where: { referralCode } })
       : null;
 
-    const user = await prisma.user.create({
+    const user = await firestoreDb.user.create({
       data: {
         name: data.name,
         email,
@@ -126,9 +126,9 @@ export async function registerAction(formData: FormData): Promise<ActionResult> 
 
     const organizationId = user.memberships[0]?.organizationId;
     if (organizationId) {
-      const plan = await prisma.plan.findUnique({ where: { slug: planSlugForType(organizationType) } });
+      const plan = await firestoreDb.plan.findUnique({ where: { slug: planSlugForType(organizationType) } });
       if (plan) {
-        await prisma.subscription.create({
+        await firestoreDb.subscription.create({
           data: {
             organizationId,
             planId: plan.id,
@@ -139,7 +139,7 @@ export async function registerAction(formData: FormData): Promise<ActionResult> 
     }
 
     const code = generateNumericCode(6);
-    await prisma.emailToken.create({
+    await firestoreDb.emailToken.create({
       data: {
         userId: user.id,
         code,
@@ -177,12 +177,12 @@ export async function confirmEmailAction(formData: FormData): Promise<ActionResu
     }
 
     const email = parsed.data.email.toLowerCase();
-    const user = await prisma.user.findUnique({ where: { email } });
+    const user = await firestoreDb.user.findUnique({ where: { email } });
     if (!user) {
       return { ok: false, message: "Não foi possível confirmar o cadastro." };
     }
 
-    const token = await prisma.emailToken.findFirst({
+    const token = await firestoreDb.emailToken.findFirst({
       where: {
         userId: user.id,
         code: parsed.data.code,
@@ -196,12 +196,12 @@ export async function confirmEmailAction(formData: FormData): Promise<ActionResu
       return { ok: false, message: "Código inválido ou expirado." };
     }
 
-    await prisma.$transaction([
-      prisma.emailToken.updateMany({
+    await firestoreDb.$transaction([
+      firestoreDb.emailToken.updateMany({
         where: { userId: user.id, usedAt: null },
         data: { usedAt: new Date() },
       }),
-      prisma.user.update({
+      firestoreDb.user.update({
         where: { id: user.id },
         data: { emailVerifiedAt: new Date() },
       }),
@@ -250,25 +250,25 @@ async function tryLocalExternalApproverLogin(
   email: string,
   password: string,
 ): Promise<SessionPayload | null> {
-  const user = await prisma.user.findUnique({ where: { email } });
+  const user = await firestoreDb.user.findUnique({ where: { email } });
   if (!user?.passwordHash) return null;
 
   const valid = await verifyPassword(password, user.passwordHash);
   if (!valid) return null;
 
-  const membership = await prisma.organizationMember.findFirst({
+  const membership = await firestoreDb.organizationMember.findFirst({
     where: { userId: user.id, role: MemberRole.external_approver },
     include: { organization: true },
   });
   if (!membership) return null;
 
-  const scopeCount = await prisma.externalApproverScope.count({
+  const scopeCount = await firestoreDb.externalApproverScope.count({
     where: { userId: user.id, organizationId: membership.organizationId },
   });
   if (scopeCount === 0) return null;
 
   if (!user.emailVerifiedAt) {
-    await prisma.user.update({
+    await firestoreDb.user.update({
       where: { id: user.id },
       data: { emailVerifiedAt: new Date() },
     });
@@ -289,6 +289,15 @@ export async function loginAction(formData: FormData): Promise<ActionResult> {
   try {
     if (!isFirebaseAuthConfigured()) {
       return { ok: false, message: "Firebase Auth não configurado no ambiente." };
+    }
+
+    const { isFirebaseAdminConfigured } = await import("@/lib/firebase/admin");
+    if (!isFirebaseAdminConfigured()) {
+      return {
+        ok: false,
+        message:
+          "Firebase Admin ausente. No Firebase Console (projeto marcio-ab7d9) → Project settings → Service accounts → Generate new private key, e cole o JSON em FIREBASE_SERVICE_ACCOUNT_JSON no .env.local (uma linha).",
+      };
     }
 
     const parsed = loginSchema.safeParse({
@@ -332,7 +341,7 @@ export async function loginAction(formData: FormData): Promise<ActionResult> {
       return { ok: false, message: toPublicErrorMessage(error) };
     }
 
-    const user = await prisma.user.findUnique({ where: { email } });
+    const user = await firestoreDb.user.findUnique({ where: { email } });
     if (!user) {
       return {
         ok: false,
@@ -341,7 +350,7 @@ export async function loginAction(formData: FormData): Promise<ActionResult> {
     }
 
     if (user.firebaseUid !== firebaseUid) {
-      await prisma.user.update({
+      await firestoreDb.user.update({
         where: { id: user.id },
         data: { firebaseUid },
       });
@@ -411,13 +420,13 @@ export async function forgotPasswordAction(formData: FormData): Promise<ActionRe
       message: "Se o e-mail existir, enviaremos um link de recuperação.",
     };
 
-    const user = await prisma.user.findUnique({ where: { email } });
+    const user = await firestoreDb.user.findUnique({ where: { email } });
     if (!user) {
       return generic;
     }
 
     const resetToken = generateResetToken();
-    await prisma.passwordResetToken.create({
+    await firestoreDb.passwordResetToken.create({
       data: {
         userId: user.id,
         token: resetToken,
@@ -461,7 +470,7 @@ export async function resetPasswordAction(formData: FormData): Promise<ActionRes
       return { ok: false, message: parsed.error.issues[0]?.message ?? "Dados inválidos" };
     }
 
-    const reset = await prisma.passwordResetToken.findUnique({
+    const reset = await firestoreDb.passwordResetToken.findUnique({
       where: { token: parsed.data.token },
       include: { user: true },
     });
@@ -473,12 +482,12 @@ export async function resetPasswordAction(formData: FormData): Promise<ActionRes
     const passwordHash = await hashPassword(parsed.data.password);
     const usedAt = new Date();
 
-    await prisma.$transaction([
-      prisma.user.update({
+    await firestoreDb.$transaction([
+      firestoreDb.user.update({
         where: { id: reset.userId },
         data: { passwordHash },
       }),
-      prisma.passwordResetToken.updateMany({
+      firestoreDb.passwordResetToken.updateMany({
         where: { userId: reset.userId, usedAt: null },
         data: { usedAt },
       }),
@@ -521,12 +530,12 @@ export async function updateProfileAction(formData: FormData): Promise<ActionRes
       return { ok: false, message: "Informe um nome com pelo menos 2 caracteres." };
     }
 
-    const previous = await prisma.user.findUnique({
+    const previous = await firestoreDb.user.findUnique({
       where: { id: session.userId },
       select: { name: true },
     });
 
-    await prisma.user.update({
+    await firestoreDb.user.update({
       where: { id: session.userId },
       data: { name },
     });
@@ -556,7 +565,7 @@ export async function resendConfirmationAction(formData: FormData): Promise<Acti
       return { ok: false, message: "E-mail inválido" };
     }
 
-    const user = await prisma.user.findUnique({ where: { email } });
+    const user = await firestoreDb.user.findUnique({ where: { email } });
     if (!user) {
       return { ok: true, message: "Se o e-mail existir, enviamos um novo código." };
     }
@@ -566,7 +575,7 @@ export async function resendConfirmationAction(formData: FormData): Promise<Acti
     }
 
     const code = generateNumericCode(6);
-    await prisma.emailToken.create({
+    await firestoreDb.emailToken.create({
       data: {
         userId: user.id,
         code,

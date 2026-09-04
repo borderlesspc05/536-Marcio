@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/prisma";
+import { firestoreDb } from "@/lib/firebase/firestore-db";
 
 type AuditInput = {
   userId?: string | null;
@@ -10,7 +10,7 @@ type AuditInput = {
 };
 
 export async function writeAuditLog(input: AuditInput) {
-  await prisma.auditLog.create({
+  await firestoreDb.auditLog.create({
     data: {
       userId: input.userId ?? null,
       action: input.action,

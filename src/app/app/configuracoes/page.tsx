@@ -15,9 +15,9 @@ import {
   UserRound,
   Users,
 } from "lucide-react";
-import { MemberRole, OrganizationType } from "@prisma/client";
+import { MemberRole, OrganizationType } from "@/lib/domain/types";
 import { getSession } from "@/lib/auth/session";
-import { prisma } from "@/lib/prisma";
+import { firestoreDb } from "@/lib/firebase/firestore-db";
 import { UpdateProfileForm } from "@/features/auth/components/UpdateProfileForm";
 import { profileLabel } from "@/features/navigation/menu";
 
@@ -65,7 +65,7 @@ export default async function Page() {
   if (!session) redirect("/acesse");
 
   const [user, organization, subscription, activity] = await Promise.all([
-    prisma.user.findUniqueOrThrow({
+    firestoreDb.user.findUniqueOrThrow({
       where: { id: session.userId },
       select: {
         name: true,
@@ -76,7 +76,7 @@ export default async function Page() {
         updatedAt: true,
       },
     }),
-    prisma.organization.findUniqueOrThrow({
+    firestoreDb.organization.findUniqueOrThrow({
       where: { id: session.organizationId },
       select: {
         name: true,
@@ -86,12 +86,12 @@ export default async function Page() {
         _count: { select: { members: true } },
       },
     }),
-    prisma.subscription.findFirst({
+    firestoreDb.subscription.findFirst({
       where: { organizationId: session.organizationId },
       include: { plan: { select: { name: true } } },
       orderBy: { createdAt: "desc" },
     }),
-    prisma.auditLog.findMany({
+    firestoreDb.auditLog.findMany({
       where: { userId: session.userId, action: { startsWith: "auth." } },
       select: { id: true, action: true, createdAt: true },
       orderBy: { createdAt: "desc" },

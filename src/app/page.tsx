@@ -1,11 +1,13 @@
-import { listActivePlans } from "@/features/billing/plan-gate";
-import { getActiveBanners, getMarketingSettings } from "@/features/marketing/data";
 import { PublicHeader } from "@/components/marketing/PublicHeader";
 import { LandingHero } from "@/components/marketing/LandingHero";
 import { BannerCarousel } from "@/components/marketing/BannerCarousel";
 import { PlansSection, type PlanCard } from "@/components/marketing/PlansSection";
 import { WhatsAppCta } from "@/components/marketing/WhatsAppCta";
 import { PublicFooter } from "@/components/marketing/PublicFooter";
+import {
+  getPublicMarketingSettings,
+  PUBLIC_LANDING_BANNERS,
+} from "@/features/marketing/public-settings";
 
 const FREE_FEATURES = [
   "Até 15 cotações/mês",
@@ -14,15 +16,20 @@ const FREE_FEATURES = [
 ] as const;
 
 const BASIC_FEATURES = [
-  ...FREE_FEATURES,
+  "Até 50 cotações/mês",
+  "Comparativo na plataforma",
+  "Negociar e aprovar online",
   "Whitelabel no comparativo",
   "Consulte Adicionais",
 ] as const;
 
 const PREMIUM_FEATURES = [
-  ...BASIC_FEATURES,
+  "Cotações ilimitadas/mês",
+  "Comparativo na plataforma",
+  "Negociar e aprovar online",
+  "Whitelabel no comparativo",
+  "Consulte Adicionais",
   "Gestão de Parcerias",
-  "Comissionamento por fornecedor",
   "SLA de solicitações",
   "Gestão do processo",
 ] as const;
@@ -47,7 +54,7 @@ const DISPLAY: Record<
 > = {
   "sindico-free": {
     name: "Cota Free",
-    description: "Até 15 cotações para começar com governança.",
+    description: "Até 15 cotações. Ideal para pequenas operações, mas com segurança.",
     priceCents: 0,
     monthlyQuota: 15,
     features: [...FREE_FEATURES],
@@ -88,52 +95,36 @@ function buildCotaServiceWhatsAppUrl(baseUrl: string) {
   }
 }
 
-export default async function HomePage() {
-  const [marketing, banners, plans] = await Promise.all([
-    getMarketingSettings(),
-    getActiveBanners(),
-    listActivePlans("solicitante"),
-  ]);
-
+export default function HomePage() {
+  const marketing = getPublicMarketingSettings();
   const serviceWhatsApp = buildCotaServiceWhatsAppUrl(marketing.whatsappUrl);
-
-  const planCards: PlanCard[] = plans
-    .filter((plan) =>
-      ["sindico-free", "sindico-pago", "adm-premium", "cota-service"].includes(plan.slug),
-    )
-    .map((plan) => {
-      const display = DISPLAY[plan.slug];
-      const isService = plan.slug === "cota-service";
-      return {
-        slug: plan.slug,
-        name: display?.name ?? plan.name,
-        description: display?.description ?? plan.description,
-        priceCents: display?.priceCents ?? plan.priceCents,
-        isFree: plan.isFree,
-        monthlyQuota: display?.monthlyQuota ?? plan.monthlyQuota,
-        features: display?.features ?? ["Plataforma CotaCondo"],
-        recommended: plan.slug === "adm-premium",
-        ...(isService
-          ? {
-              consultPrice: true,
-              hideQuota: true,
-              ctaLabel: "Falar com Consultor",
-              ctaHref: serviceWhatsApp,
-            }
-          : {}),
-      };
-    });
-
   const order = ["sindico-free", "sindico-pago", "adm-premium", "cota-service"];
-  planCards.sort((a, b) => order.indexOf(a.slug) - order.indexOf(b.slug));
+  const planCards: PlanCard[] = order.map((slug) => {
+    const display = DISPLAY[slug]!;
+    const isService = slug === "cota-service";
+    return {
+      slug,
+      ...display,
+      isFree: slug === "sindico-free",
+      recommended: slug === "adm-premium",
+      ...(isService
+        ? {
+            consultPrice: true,
+            hideQuota: true,
+            ctaLabel: "Falar com Consultor",
+            ctaHref: serviceWhatsApp,
+          }
+        : {}),
+    };
+  });
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_10%_8%,rgba(192,38,211,0.1),transparent_32%),radial-gradient(circle_at_90%_12%,rgba(6,182,212,0.1),transparent_28%),#ffffff]">
+    <div className="min-h-screen bg-[radial-gradient(circle_at_10%_8%,rgba(167,17,95,0.09),transparent_32%),radial-gradient(circle_at_90%_12%,rgba(8,127,140,0.08),transparent_28%),#ffffff]">
       <PublicHeader blogUrl={marketing.blogUrl} />
       <main>
         <LandingHero />
         <BannerCarousel
-          banners={banners.map((item) => ({
+          banners={PUBLIC_LANDING_BANNERS.map((item) => ({
             id: item.id,
             title: item.title,
             imageUrl: item.imageUrl,
@@ -142,7 +133,7 @@ export default async function HomePage() {
         />
         <PlansSection
           title="Escolha um plano e otimize a sua operação de compras."
-          subtitle="Com os planos CotaCondo você ganha tempo, mais segurança e gestão de ponta a ponta na administradora."
+          subtitle="Com os planos CotaCondo você ganha tempo, inteligência de dados e mais segurança no processo de compras. Otimize a sua operação!"
           plans={planCards}
           audience="solicitante"
         />
