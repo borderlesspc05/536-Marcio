@@ -6,30 +6,21 @@ import { firestoreDb } from "@/lib/firebase/firestore-db";
 import { requireAuthorizedSession } from "@/lib/auth/guards";
 import { toPublicErrorMessage } from "@/lib/errors";
 import { writeAuditLog } from "@/lib/audit";
-import {
-  can,
-  getPlanGate,
-  parsePlanFeatures,
-} from "@/features/billing/plan-gate";
+import { parsePlanFeatures } from "@/features/billing/plan-gate";
 
 import { FREE_PARTNERSHIP_MESSAGE } from "@/features/partnerships/messages";
 
 export type ActionResult = { ok: boolean; message?: string };
 export async function createPartnershipAction(formData: FormData): Promise<ActionResult> {
   try {
-    const session = await requireAuthorizedSession({
+    const { requireCapability } = await import("@/lib/auth/capability");
+    const { session } = await requireCapability({
       types: [OrganizationType.administradora],
       roles: [MemberRole.master],
       href: "/app/parcerias",
+      feature: "partnerships",
+      featureMessage: "Parcerias disponíveis apenas no plano Administradora Premium.",
     });
-
-    const gate = await getPlanGate(session.organizationId);
-    if (!can(gate, "partnerships")) {
-      return {
-        ok: false,
-        message: "Parcerias disponíveis apenas no plano Administradora Premium.",
-      };
-    }
 
     const supplierOrgId = String(formData.get("supplierOrgId") ?? "");
     if (!supplierOrgId) return { ok: false, message: "Selecione um fornecedor." };
@@ -93,10 +84,13 @@ export async function createPartnershipAction(formData: FormData): Promise<Actio
 
 export async function endPartnershipAction(formData: FormData): Promise<ActionResult> {
   try {
-    const session = await requireAuthorizedSession({
+    const { requireCapability } = await import("@/lib/auth/capability");
+    const { session } = await requireCapability({
       types: [OrganizationType.administradora],
       roles: [MemberRole.master],
       href: "/app/parcerias",
+      feature: "partnerships",
+      featureMessage: "Parcerias disponíveis apenas no plano Administradora Premium.",
     });
 
     const partnershipId = String(formData.get("partnershipId") ?? "");

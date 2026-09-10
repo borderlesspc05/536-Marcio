@@ -27,7 +27,7 @@ export async function listExternalApproverQuotations(input: {
     input.tab === "pendentes"
       ? {
           ...baseWhere,
-          externalApproval: null,
+          externalApproval: { is: null },
           servicePipelineStatus: {
             in: ["em_analise", "em_negociacao"] as ServicePipelineStatus[],
           },
@@ -61,7 +61,11 @@ export async function listExternalApproverQuotations(input: {
           conditions: { orderBy: { sortOrder: "asc" } },
         },
       },
-      rifAnalyses: { orderBy: { createdAt: "desc" }, take: 1 },
+      rifAnalyses: {
+        where: { status: "published" },
+        orderBy: { createdAt: "desc" },
+        take: 1,
+      },
     },
     orderBy: { updatedAt: "desc" },
   });
@@ -100,7 +104,11 @@ export async function getExternalApproverQuotation(input: {
           conditions: { orderBy: { sortOrder: "asc" } },
         },
       },
-      rifAnalyses: { orderBy: { createdAt: "desc" }, take: 1 },
+      rifAnalyses: {
+        where: { status: "published" },
+        orderBy: { createdAt: "desc" },
+        take: 1,
+      },
     },
   });
 }

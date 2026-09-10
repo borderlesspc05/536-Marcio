@@ -6,6 +6,7 @@ import { AppError } from "@/lib/errors";
 import { getPaymentProvider } from "@/features/billing/payment-provider";
 import { calculateProrationCents } from "@/features/billing/money";
 import { isPlanAvailableForOrganization } from "@/features/billing/plan-catalog";
+import { emitDomainEvent } from "@/lib/domain-events";
 
 function addMonths(date: Date, months: number): Date {
   const next = new Date(date);
@@ -188,23 +189,17 @@ export async function activatePlanChange(input: {
     metadata: { plan: toPlan.slug, changeType: input.changeType },
   });
 
-  await firestoreDb.domainEvent.create({
-    data: {
-      type: "subscription.activated",
-      entityType: "organization",
-      entityId: input.organizationId,
-      organizationId: input.organizationId,
-      payload: JSON.stringify({ planSlug: toPlan.slug, changeType: input.changeType }),
-    },
-  });
-
-  const { notifyAfterDomainEvent } = await import("@/features/notifications/notify-after");
-  await notifyAfterDomainEvent({
+  await emitDomainEvent({
     type: "subscription.activated",
     entityType: "organization",
     entityId: input.organizationId,
     organizationId: input.organizationId,
-    payload: { planSlug: toPlan.slug, changeType: input.changeType, organizationId: input.organizationId },
+    payload: {
+      planSlug: toPlan.slug,
+      changeType: input.changeType,
+      organizationId: input.organizationId,
+      checkoutId: input.checkoutId ?? null,
+    },
   });
 
   return { status: "active" as const, plan: toPlan };
@@ -536,15 +531,19 @@ export async function createCustomBillingCheckout(input: {
   return { checkoutId: checkout.id, checkoutUrl: session.checkoutUrl };
 }
 
+/**
+ * Checkout fulfill: marca paid uma vez (claim) e ativa plano/addon.
+ * Spark: sem transação multi-doc real — o claim por status reduz double-fulfill.
+ */
 export async function fulfillCheckoutPaid(checkoutId: string, userId?: string | null) {
   const checkout = await firestoreDb.paymentCheckout.findUnique({
     where: { id: checkoutId },
     include: { plan: true },
   });
   if (!checkout) throw new Error("Checkout não encontrado.");
+
   if (checkout.status === "paid") {
     // Assinaturas Asaas reutilizam o mesmo checkout externo em todos os ciclos.
-    // Um novo pagamento confirmado reativa a conta após eventual inadimplência.
     if (checkout.provider === "asaas" && checkout.kind === "plan") {
       const now = new Date();
       await firestoreDb.subscription.updateMany({
@@ -559,10 +558,32 @@ export async function fulfillCheckoutPaid(checkoutId: string, userId?: string | 
     return { alreadyProcessed: true as const, checkout };
   }
 
-  await firestoreDb.paymentCheckout.update({
-    where: { id: checkout.id },
+  // Claim: só o primeiro caller com status pending avança (Spark: sem tx multi-doc).
+  const claim = await firestoreDb.paymentCheckout.updateMany({
+    where: { id: checkout.id, status: "pending" },
     data: { status: "paid", paidAt: new Date() },
   });
+
+  if (claim.count === 0) {
+    const latest = await firestoreDb.paymentCheckout.findUnique({
+      where: { id: checkoutId },
+      include: { plan: true },
+    });
+    if (latest?.status === "paid") {
+      return { alreadyProcessed: true as const, checkout: latest };
+    }
+    const forced = await firestoreDb.paymentCheckout.updateMany({
+      where: { id: checkout.id, status: { not: "paid" } },
+      data: { status: "paid", paidAt: new Date() },
+    });
+    if (forced.count === 0) {
+      const again = await firestoreDb.paymentCheckout.findUniqueOrThrow({
+        where: { id: checkoutId },
+        include: { plan: true },
+      });
+      return { alreadyProcessed: true as const, checkout: again };
+    }
+  }
 
   const metadata = JSON.parse(checkout.metadataJson || "{}") as {
     categoryIds?: string[];
@@ -584,19 +605,31 @@ export async function fulfillCheckoutPaid(checkoutId: string, userId?: string | 
         planId: checkout.planId,
       },
     });
+    await emitDomainEvent({
+      type: "checkout.paid",
+      entityType: "payment_checkout",
+      entityId: checkout.id,
+      organizationId: checkout.organizationId,
+      payload: metadata,
+    });
     return { alreadyProcessed: false as const, checkout };
   }
 
   if (checkout.kind === "plan" || checkout.kind === "migration") {
     if (!checkout.planId) throw new Error("Checkout sem plano.");
-    await activatePlanChange({
-      organizationId: checkout.organizationId,
-      toPlanId: checkout.planId,
-      changeType: checkout.kind === "migration" ? "migration_upgrade" : "upgrade",
-      userId: userId ?? checkout.userId,
-      immediate: true,
-      checkoutId: checkout.id,
+    const priorActivation = await firestoreDb.subscriptionChange.findFirst({
+      where: { checkoutId: checkout.id },
     });
+    if (!priorActivation) {
+      await activatePlanChange({
+        organizationId: checkout.organizationId,
+        toPlanId: checkout.planId,
+        changeType: checkout.kind === "migration" ? "migration_upgrade" : "upgrade",
+        userId: userId ?? checkout.userId,
+        immediate: true,
+        checkoutId: checkout.id,
+      });
+    }
   }
 
   if (checkout.kind === "migration" && metadata.migrationId) {
@@ -658,14 +691,14 @@ export async function fulfillCheckoutPaid(checkoutId: string, userId?: string | 
     metadata: { kind: checkout.kind, amountCents: checkout.amountCents },
   });
 
-  await firestoreDb.domainEvent.create({
-    data: {
-      type: "checkout.paid",
-      entityType: "payment_checkout",
-      entityId: checkout.id,
-      organizationId: checkout.organizationId,
-      payload: checkout.metadataJson,
-    },
+  await emitDomainEvent({
+    type: "checkout.paid",
+    entityType: "payment_checkout",
+    entityId: checkout.id,
+    organizationId: checkout.organizationId,
+    payload: typeof checkout.metadataJson === "string"
+      ? (JSON.parse(checkout.metadataJson || "{}") as Record<string, unknown>)
+      : metadata,
   });
 
   return { alreadyProcessed: false as const, checkout };

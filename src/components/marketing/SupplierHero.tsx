@@ -48,8 +48,8 @@ export function SupplierHero({ videoUrl }: SupplierHeroProps) {
 
   return (
     <section className="relative overflow-hidden pt-28 pb-16 lg:pt-32 lg:pb-20">
-      <div className="pointer-events-none absolute top-[10%] right-[8%] -z-10 h-[400px] w-[400px] rounded-full bg-[#A7115F]/[0.11] blur-[100px]" />
-      <div className="pointer-events-none absolute bottom-[6%] left-[6%] -z-10 h-[320px] w-[320px] rounded-full bg-[#087F8C]/[0.09] blur-[110px]" />
+      <div className="pointer-events-none absolute top-[10%] right-[8%] -z-10 h-[400px] w-[400px] rounded-full bg-[#c10089]/[0.11] blur-[100px]" />
+      <div className="pointer-events-none absolute bottom-[6%] left-[6%] -z-10 h-[320px] w-[320px] rounded-full bg-[#00aab3]/[0.09] blur-[110px]" />
 
       <Container>
         <div className="grid items-center gap-12 lg:grid-cols-12">
@@ -59,7 +59,7 @@ export function SupplierHero({ videoUrl }: SupplierHeroProps) {
             transition={{ duration: 0.9, ease: [0.16, 1, 0.3, 1] }}
             className="lg:col-span-6"
           >
-            <h1 className="text-[36px] font-extrabold leading-[1.1] tracking-[-0.04em] text-[#102A43] sm:text-[44px] lg:text-[52px]">
+            <h1 className="text-[36px] font-extrabold leading-[1.1] tracking-[-0.04em] text-[#00535a] sm:text-[44px] lg:text-[52px]">
               Receba oportunidades de negócios, aumente a base de clientes e se conecte com o
               mercado.
             </h1>
@@ -70,12 +70,12 @@ export function SupplierHero({ videoUrl }: SupplierHeroProps) {
               <Link href="/cadastro?tipo=fornecedor">
                 <Button size="lg" className="group pl-6 pr-2">
                   Criar conta de fornecedor
-                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-[#A7115F] transition-transform group-hover:translate-x-0.5">
+                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-[#c10089] transition-transform group-hover:translate-x-0.5">
                     <ArrowRight className="h-4 w-4" />
                   </span>
                 </Button>
               </Link>
-              <Link href="#planos-fornecedor" className="text-sm font-bold text-[#A7115F]">
+              <Link href="#planos-fornecedor" className="text-sm font-bold text-[#c10089]">
                 Ver planos
               </Link>
             </div>
@@ -88,7 +88,7 @@ export function SupplierHero({ videoUrl }: SupplierHeroProps) {
             className="relative flex justify-center lg:col-span-6 lg:justify-end"
           >
             {embedUrl ? (
-              <div className="relative w-full max-w-[620px] overflow-hidden rounded-2xl border border-[#A7115F]/15 bg-[#102A43] shadow-[0_28px_70px_-34px_rgba(16,42,67,0.85)]">
+              <div className="relative w-full max-w-[620px] overflow-hidden rounded-2xl border border-[#c10089]/15 bg-[#00535a] shadow-[0_28px_70px_-34px_rgba(16,42,67,0.85)]">
                 <div className="aspect-video">
                   <iframe
                     src={embedUrl}

@@ -94,14 +94,11 @@ export async function getServiceQuotation(id: string, managedByOrgId: string) {
           organization: true,
           conditions: {
             orderBy: { sortOrder: "asc" },
-            include: { attachments: true },
           },
-          messages: { orderBy: { createdAt: "asc" } },
+          messages: { orderBy: { createdAt: "asc" }, take: 20 },
         },
       },
-      invites: { include: { supplier: true } },
-      rifAnalyses: { orderBy: { createdAt: "desc" } },
-      attachments: true,
+      rifAnalyses: { orderBy: { createdAt: "desc" }, take: 5 },
     },
   });
 }

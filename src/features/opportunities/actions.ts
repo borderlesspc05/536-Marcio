@@ -22,6 +22,7 @@ import {
   isSupplierPipelineStage,
   type SupplierPipelineStageValue,
 } from "@/features/opportunities/pipeline";
+import { emitDomainEvent } from "@/lib/domain-events";
 
 export type ActionResult = { ok: boolean; message?: string; proposalId?: string };
 
@@ -90,6 +91,7 @@ export async function declineInviteAction(formData: FormData): Promise<ActionRes
         supplierOrgId: session.organizationId,
         status: "pendente",
       },
+      include: { quotation: true },
     });
     if (!invite) return { ok: false, message: "Oportunidade não encontrada." };
 
@@ -103,13 +105,15 @@ export async function declineInviteAction(formData: FormData): Promise<ActionRes
       },
     });
 
-    await firestoreDb.domainEvent.create({
-      data: {
-        type: "invite.declined",
-        entityType: "quotation_invite",
-        entityId: invite.id,
-        organizationId: session.organizationId,
-        payload: JSON.stringify({ reason: parsed.data.reason ?? null }),
+    await emitDomainEvent({
+      type: "invite.declined",
+      entityType: "quotation_invite",
+      entityId: invite.id,
+      organizationId: session.organizationId,
+      payload: {
+        reason: parsed.data.reason ?? null,
+        quotationId: invite.quotationId,
+        solicitanteOrgId: invite.quotation.organizationId,
       },
     });
 
@@ -205,18 +209,32 @@ export async function submitProposalAction(formData: FormData): Promise<ActionRe
     const inviteId = String(formData.get("inviteId") ?? "");
 
     const conditionCount = Number(formData.get("conditionCount") ?? 0);
-    const conditions: Array<{ amountCents: number; paymentTerms: string }> = [];
+    const conditions: Array<{
+      amountCents: number;
+      paymentTerms: string;
+      formIndex: number;
+    }> = [];
     for (let i = 0; i < conditionCount; i += 1) {
-      const amountRaw = String(formData.get(`amount_${i}`) ?? "").replace(",", ".");
+      const amountRaw = String(formData.get(`amount_${i}`) ?? "").replace(",", ".").trim();
+      const paymentTerms = String(formData.get(`paymentTerms_${i}`) ?? "").trim();
+      // Ignora blocos extras deixados em branco (ex.: 2ª condição não preenchida).
+      if (!amountRaw && !paymentTerms) continue;
       const amountNumber = Number(amountRaw);
       const amountCents = Math.round(amountNumber * 100);
       conditions.push({
         amountCents,
-        paymentTerms: String(formData.get(`paymentTerms_${i}`) ?? ""),
+        paymentTerms,
+        formIndex: i,
       });
     }
 
-    const parsed = submitProposalSchema.safeParse({ inviteId, conditions });
+    const parsed = submitProposalSchema.safeParse({
+      inviteId,
+      conditions: conditions.map(({ amountCents, paymentTerms }) => ({
+        amountCents,
+        paymentTerms,
+      })),
+    });
     if (!parsed.success) {
       return { ok: false, message: parsed.error.issues[0]?.message ?? "Dados inválidos" };
     }
@@ -318,7 +336,8 @@ export async function submitProposalAction(formData: FormData): Promise<ActionRe
           },
         });
 
-        const file = formData.get(`attachment_${index}`);
+        const formIndex = conditions[index]?.formIndex ?? index;
+        const file = formData.get(`attachment_${formIndex}`);
         if (file instanceof File && file.size > 0) {
           const stored = await storeProposalConditionAttachment({
             organizationId: session.organizationId,
@@ -343,24 +362,10 @@ export async function submitProposalAction(formData: FormData): Promise<ActionRe
         data: { proposalsCount: { increment: 1 } },
       });
 
-      await tx.domainEvent.create({
-        data: {
-          type: "proposal.submitted",
-          entityType: "proposal",
-          entityId: created.id,
-          organizationId: session.organizationId,
-          payload: JSON.stringify({
-            quotationId: invite.quotationId,
-            conditions: parsed.data.conditions.length,
-          }),
-        },
-      });
-
       return created;
     });
 
-    const { notifyAfterDomainEvent } = await import("@/features/notifications/notify-after");
-    await notifyAfterDomainEvent({
+    await emitDomainEvent({
       type: "proposal.submitted",
       entityType: "proposal",
       entityId: proposal.id,

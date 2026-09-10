@@ -16,7 +16,7 @@ export function NotificationBell({ unreadCount }: NotificationBellProps) {
     <div className="relative">
       <Link
         href="/app/notificacoes"
-        className="relative inline-flex h-9 w-9 items-center justify-center rounded-lg border border-[#B9CAD8] bg-white text-[#173B57] shadow-sm transition-[background-color,border-color,color] hover:border-[#A7115F]/40 hover:bg-[#FCE7F3] hover:text-[#A7115F] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#A7115F]/40"
+        className="relative inline-flex h-9 w-9 items-center justify-center rounded-lg border border-[#B9CAD8] bg-white text-[#173B57] shadow-sm transition-[background-color,border-color,color] hover:border-[#c10089]/40 hover:bg-[#FCE7F3] hover:text-[#c10089] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c10089]/40"
         aria-label={unreadCount > 0 ? `${unreadCount} notificações não lidas` : "Notificações"}
         onMouseEnter={() => setOpen(true)}
         onMouseLeave={() => setOpen(false)}
@@ -25,7 +25,7 @@ export function NotificationBell({ unreadCount }: NotificationBellProps) {
       >
         <Bell aria-hidden="true" className="h-4 w-4" />
         {unreadCount > 0 ? (
-          <span className="absolute -right-1 -top-1 inline-flex min-w-4 items-center justify-center rounded-full bg-[#A7115F] px-1 text-[10px] font-bold text-white ring-2 ring-[#F7FAFC]">
+          <span className="absolute -right-1 -top-1 inline-flex min-w-4 items-center justify-center rounded-full bg-[#c10089] px-1 text-[10px] font-bold text-white ring-2 ring-[#F7FAFC]">
             {badge}
           </span>
         ) : null}

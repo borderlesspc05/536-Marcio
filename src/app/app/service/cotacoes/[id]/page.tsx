@@ -13,7 +13,9 @@ import {
   setServicePipelineStatusAction,
   solicitanteConfirmAcceptAction,
 } from "@/features/master-service/actions";
+import { ServiceActionForm } from "@/features/master-service/components/ServiceActionForm";
 import { formAction } from "@/lib/form-action";
+import { formatDateTimePt } from "@/lib/format-date";
 import { formatPriceCents } from "@/features/billing/money";
 import { Button } from "@/components/ui/Button";
 
@@ -109,12 +111,12 @@ export default async function ServiceCotacaoDetailPage({ params }: PageProps) {
               Atualizar pipeline
             </Button>
           </form>
-          <form action={formAction(dispatchServiceQuotationAction)} className="mt-3">
+          <ServiceActionForm action={dispatchServiceQuotationAction} className="mt-3">
             <input type="hidden" name="quotationId" value={quotation.id} />
             <Button type="submit" className="w-full">
               Disparar / Em Andamento
             </Button>
-          </form>
+          </ServiceActionForm>
           <form action={formAction(markServiceRejectedAction)} className="mt-2">
             <input type="hidden" name="quotationId" value={quotation.id} />
             <Button type="submit" variant="secondary" className="w-full">
@@ -126,43 +128,66 @@ export default async function ServiceCotacaoDetailPage({ params }: PageProps) {
 
       <section className="rounded-2xl border border-black/5 bg-white/80 p-5">
         <h2 className="font-semibold">Propostas e negociação</h2>
+        {quotation.masterAcceptedAt ? (
+          <p className="mt-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
+            Aceite Master registrado em {formatDateTimePt(quotation.masterAcceptedAt)}. Pipeline em
+            análise — o botão &quot;Confirmar aceite do solicitante&quot; já pode ser usado.
+          </p>
+        ) : null}
         <div className="mt-4 space-y-4">
           {quotation.proposals.length === 0 ? (
             <p className="text-sm text-neutral-500">Ainda sem propostas.</p>
           ) : (
-            quotation.proposals.map((proposal) => (
-              <div key={proposal.id} className="rounded-xl border border-black/5 p-4">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <p className="font-semibold">{proposal.organization.name}</p>
-                    <p className="text-xs text-neutral-500">Status: {proposal.status}</p>
+            quotation.proposals.map((proposal) => {
+              const isMasterPick = quotation.approvedProposalId === proposal.id;
+              return (
+                <div
+                  key={proposal.id}
+                  className={`rounded-xl border p-4 ${
+                    isMasterPick ? "border-emerald-300 bg-emerald-50/40" : "border-black/5"
+                  }`}
+                >
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <p className="font-semibold">{proposal.organization.name}</p>
+                      <p className="text-xs text-neutral-500">Status: {proposal.status}</p>
+                      {isMasterPick ? (
+                        <p className="mt-1 text-xs font-semibold text-emerald-700">
+                          Indicada pelo Aceite Master
+                        </p>
+                      ) : null}
+                    </div>
+                    {proposal.status !== "recusada" ? (
+                      <ServiceActionForm action={masterAcceptProposalAction}>
+                        <input type="hidden" name="quotationId" value={quotation.id} />
+                        <input type="hidden" name="proposalId" value={proposal.id} />
+                        <Button
+                          type="submit"
+                          size="sm"
+                          variant={isMasterPick ? "secondary" : "primary"}
+                        >
+                          {isMasterPick ? "Trocar indicação" : "Aceite Master"}
+                        </Button>
+                      </ServiceActionForm>
+                    ) : null}
                   </div>
-                  {proposal.status !== "recusada" ? (
-                    <form action={formAction(masterAcceptProposalAction)}>
-                      <input type="hidden" name="quotationId" value={quotation.id} />
-                      <input type="hidden" name="proposalId" value={proposal.id} />
-                      <Button type="submit" size="sm">
-                        Aceite Master
-                      </Button>
-                    </form>
+                  <ul className="mt-3 space-y-1 text-sm">
+                    {proposal.conditions.map((condition) => (
+                      <li key={condition.id}>
+                        {formatPriceCents(condition.amountCents)} — {condition.paymentTerms}
+                      </li>
+                    ))}
+                  </ul>
+                  {proposal.messages.length > 0 ? (
+                    <div className="mt-3 space-y-1 rounded-lg bg-neutral-50 p-3 text-xs">
+                      {proposal.messages.map((message) => (
+                        <p key={message.id}>{message.body}</p>
+                      ))}
+                    </div>
                   ) : null}
                 </div>
-                <ul className="mt-3 space-y-1 text-sm">
-                  {proposal.conditions.map((condition) => (
-                    <li key={condition.id}>
-                      {formatPriceCents(condition.amountCents)} — {condition.paymentTerms}
-                    </li>
-                  ))}
-                </ul>
-                {proposal.messages.length > 0 ? (
-                  <div className="mt-3 space-y-1 rounded-lg bg-neutral-50 p-3 text-xs">
-                    {proposal.messages.map((message) => (
-                      <p key={message.id}>{message.body}</p>
-                    ))}
-                  </div>
-                ) : null}
-              </div>
-            ))
+              );
+            })
           )}
         </div>
       </section>
@@ -171,32 +196,68 @@ export default async function ServiceCotacaoDetailPage({ params }: PageProps) {
         <section className="rounded-2xl border border-black/5 bg-white/80 p-5">
           <h2 className="font-semibold">Análise RIF</h2>
           <p className="mt-1 text-sm text-neutral-500">
-            Gatilho manual. Visibilidade ao cliente só após aceite/publicação do Master.
-            Identidade visual: {brand?.primaryColor ?? "#9333EA"} / logo{" "}
-            {brand?.logoUrl ? "configurado" : "padrão"}.
+            Modelo executivo padrão (Objetivo → Encerramento). Só gera com{" "}
+            <strong>2 ou mais propostas</strong> para não consumir token à toa. Rascunho não aparece
+            para o solicitante — marque &quot;Publicar&quot; para liberar.
+            {brand ? (
+              <>
+                {" "}
+                Whitelabel Service: {brand.primaryColor} / logo{" "}
+                {brand.logoUrl ? "configurado" : "padrão CotaCondo"}.
+              </>
+            ) : null}
           </p>
-          <form action={formAction(generateRifAction)} className="mt-4 flex flex-wrap gap-3">
-            <input type="hidden" name="quotationId" value={quotation.id} />
-            <label className="flex items-center gap-2 text-sm">
-              <input type="checkbox" name="publish" />
-              Publicar para o solicitante
-            </label>
-            <Button type="submit">Gerar Análise RIF</Button>
-          </form>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <a
+              href={`/api/app/quotations/${quotation.id}/proposals-export`}
+              target="_blank"
+              rel="noreferrer"
+            >
+              <Button type="button" variant="secondary" size="sm">
+                Baixar propostas
+              </Button>
+            </a>
+          </div>
+          {quotation.proposals.length < 2 ? (
+            <p className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+              Aguarde pelo menos 2 propostas para acionar a Análise RIF (
+              {quotation.proposals.length} recebida
+              {quotation.proposals.length === 1 ? "" : "s"}).
+            </p>
+          ) : (
+            <ServiceActionForm
+              action={generateRifAction}
+              className="mt-4 flex flex-wrap items-center gap-3"
+            >
+              <input type="hidden" name="quotationId" value={quotation.id} />
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" name="publish" />
+                Publicar para o solicitante
+              </label>
+              <Button type="submit">Gerar Análise RIF</Button>
+            </ServiceActionForm>
+          )}
           <div className="mt-4 space-y-3">
             {quotation.rifAnalyses.map((rif) => (
               <article
                 key={rif.id}
                 className="rounded-xl border border-black/5 p-4 text-sm"
                 style={{
-                  borderTopColor: brand?.primaryColor ?? "#9333EA",
+                  borderTopColor: brand?.primaryColor ?? "#c10089",
                   borderTopWidth: 3,
                 }}
               >
-                <p className="text-xs text-neutral-500">
-                  {rif.status} · média{" "}
-                  {rif.averageCents != null ? formatPriceCents(rif.averageCents) : "—"}
-                </p>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-xs text-neutral-500">
+                    {rif.status} · média{" "}
+                    {rif.averageCents != null ? formatPriceCents(rif.averageCents) : "—"}
+                  </p>
+                  <a href={`/api/app/rif/${rif.id}`} target="_blank" rel="noreferrer">
+                    <Button type="button" size="sm" variant="secondary">
+                      Baixar RIF (HTML/PDF)
+                    </Button>
+                  </a>
+                </div>
                 <pre className="mt-2 whitespace-pre-wrap font-sans text-xs text-neutral-700">
                   {rif.summaryMarkdown}
                 </pre>
@@ -210,18 +271,23 @@ export default async function ServiceCotacaoDetailPage({ params }: PageProps) {
           </div>
         </section>
 
-        <section className="rounded-2xl border border-black/5 bg-white/80 p-5 space-y-4">
+        <section className="space-y-4 rounded-2xl border border-black/5 bg-white/80 p-5">
           <div>
             <h2 className="font-semibold">Encerramento</h2>
             <p className="mt-1 text-sm text-neutral-500">
               Após aceite do solicitante: aprova vencedor, recusa demais e libera contato.
             </p>
-            <form action={formAction(solicitanteConfirmAcceptAction)} className="mt-3">
+            <ServiceActionForm action={solicitanteConfirmAcceptAction} className="mt-3">
               <input type="hidden" name="quotationId" value={quotation.id} />
               <Button type="submit" disabled={!quotation.masterAcceptedAt}>
                 Confirmar aceite do solicitante
               </Button>
-            </form>
+            </ServiceActionForm>
+            {!quotation.masterAcceptedAt ? (
+              <p className="mt-2 text-xs text-amber-700">
+                Faça o Aceite Master em uma proposta acima para habilitar este passo.
+              </p>
+            ) : null}
           </div>
           <div className="border-t border-black/5 pt-4">
             <h3 className="font-medium">Aprovado com fornecedor externo</h3>
@@ -250,7 +316,7 @@ export default async function ServiceCotacaoDetailPage({ params }: PageProps) {
           {quotation.contactReleasedAt ? (
             <p className="text-sm text-emerald-700">
               Contato do solicitante liberado ao fornecedor em{" "}
-              {quotation.contactReleasedAt.toLocaleString("pt-BR")}.
+              {formatDateTimePt(quotation.contactReleasedAt)}.
             </p>
           ) : null}
         </section>

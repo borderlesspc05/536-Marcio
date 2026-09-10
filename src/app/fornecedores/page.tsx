@@ -129,7 +129,7 @@ export default function FornecedoresPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_80%_8%,rgba(167,17,95,0.09),transparent_34%),radial-gradient(circle_at_10%_40%,rgba(8,127,140,0.07),transparent_30%),#ffffff]">
+    <div className="min-h-screen bg-[radial-gradient(circle_at_80%_8%,rgba(193, 0, 137,0.09),transparent_34%),radial-gradient(circle_at_10%_40%,rgba(0, 170, 179,0.07),transparent_30%),#ffffff]">
       <PublicHeader blogUrl={marketing.blogUrl} />
       <main>
         <BannerCarousel banners={PUBLIC_SUPPLIER_BANNERS} />

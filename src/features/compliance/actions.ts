@@ -13,6 +13,7 @@ import {
   complianceUploadSchema,
 } from "@/features/compliance/schemas";
 import { markOverdueCompliance } from "@/features/compliance/expire";
+import { emitDomainEvent } from "@/lib/domain-events";
 
 export type ActionResult = { ok: boolean; message?: string };
 
@@ -112,14 +113,12 @@ export async function uploadComplianceDocumentAction(
       },
     });
 
-    await firestoreDb.domainEvent.create({
-      data: {
-        type: "compliance.updated",
-        entityType: "compliance_document",
-        entityId: created.id,
-        organizationId: session.organizationId,
-        payload: JSON.stringify({ status: created.status, documentType: created.documentType }),
-      },
+    await emitDomainEvent({
+      type: "compliance.updated",
+      entityType: "compliance_document",
+      entityId: created.id,
+      organizationId: session.organizationId,
+      payload: { status: created.status, documentType: created.documentType },
     });
 
     await writeAuditLog({
@@ -170,22 +169,7 @@ export async function reviewComplianceDocumentAction(
       },
     });
 
-    await firestoreDb.domainEvent.create({
-      data: {
-        type: "compliance.updated",
-        entityType: "compliance_document",
-        entityId: updated.id,
-        organizationId: updated.organizationId,
-        payload: JSON.stringify({
-          status: updated.status,
-          reviewNotes: updated.reviewNotes,
-          message: `Documento ${updated.documentType} marcado como ${updated.status}.`,
-        }),
-      },
-    });
-
-    const { notifyAfterDomainEvent } = await import("@/features/notifications/notify-after");
-    await notifyAfterDomainEvent({
+    await emitDomainEvent({
       type: "compliance.updated",
       entityType: "compliance_document",
       entityId: updated.id,

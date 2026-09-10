@@ -10,8 +10,8 @@ import { Container } from "@/components/ui/Container";
 export function LandingHero() {
   return (
     <section className="relative overflow-hidden pt-28 pb-16 lg:pt-32 lg:pb-20">
-      <div className="pointer-events-none absolute top-[8%] left-[6%] -z-10 h-[420px] w-[420px] rounded-full bg-[#A7115F]/[0.11] blur-[100px]" />
-      <div className="pointer-events-none absolute right-[4%] bottom-[4%] -z-10 h-[380px] w-[380px] rounded-full bg-[#087F8C]/[0.1] blur-[120px]" />
+      <div className="pointer-events-none absolute top-[8%] left-[6%] -z-10 h-[420px] w-[420px] rounded-full bg-[#c10089]/[0.11] blur-[100px]" />
+      <div className="pointer-events-none absolute right-[4%] bottom-[4%] -z-10 h-[380px] w-[380px] rounded-full bg-[#00aab3]/[0.1] blur-[120px]" />
 
       <Container>
         <div className="grid items-center gap-12 lg:grid-cols-12 lg:gap-12">
@@ -21,7 +21,7 @@ export function LandingHero() {
             transition={{ duration: 0.9, ease: [0.16, 1, 0.3, 1] }}
             className="lg:col-span-5"
           >
-            <h1 className="text-[36px] font-extrabold leading-[1.1] tracking-[-0.04em] text-[#102A43] sm:text-[44px] lg:text-[52px]">
+            <h1 className="text-[36px] font-extrabold leading-[1.1] tracking-[-0.04em] text-[#00535a] sm:text-[44px] lg:text-[52px]">
               A maior plataforma de inteligência de compras para o mercado condominial.
             </h1>
             <p className="mt-5 max-w-[480px] text-lg leading-relaxed tracking-[-0.01em] text-black/60">
@@ -34,7 +34,7 @@ export function LandingHero() {
                 <Link href="/cadastro?tipo=sindico">
                   <Button size="lg" className="group pl-6 pr-2">
                     Fazer cotação
-                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-[#A7115F] transition-transform group-hover:translate-x-0.5">
+                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-[#c10089] transition-transform group-hover:translate-x-0.5">
                       <ArrowRight className="h-4 w-4" />
                     </span>
                   </Button>
@@ -42,7 +42,7 @@ export function LandingHero() {
               </motion.div>
               <Link
                 href="/fornecedores"
-                className="text-sm font-bold text-[#A7115F] transition-colors hover:text-[#8F0E52]"
+                className="text-sm font-bold text-[#c10089] transition-colors hover:text-[#9a006e]"
               >
                 Sou fornecedor
               </Link>

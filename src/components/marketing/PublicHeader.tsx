@@ -51,7 +51,7 @@ export function PublicHeader({
       >
         <div
           className={cn(
-            "flex h-16 w-full max-w-[1280px] items-center justify-between gap-6 rounded-2xl border border-white/15 bg-[#102A43] px-5 shadow-[0_12px_36px_-16px_rgba(7,26,43,0.65)] backdrop-blur-[28px] transition-shadow",
+            "flex h-16 w-full max-w-[1280px] items-center justify-between gap-6 rounded-2xl border border-white/15 bg-[#00535a] px-5 shadow-[0_12px_36px_-16px_rgba(7,26,43,0.65)] backdrop-blur-[28px] transition-shadow",
             scrolled && "shadow-[0_16px_44px_-14px_rgba(7,26,43,0.8)]",
           )}
         >
@@ -85,7 +85,7 @@ export function PublicHeader({
             <Link href="/cadastro">
               <Button size="sm" className="gap-2 pl-4 pr-2">
                 Começar agora
-                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-white text-[#A7115F]">
+                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-white text-[#c10089]">
                   <ArrowRight className="h-3.5 w-3.5" />
                 </span>
               </Button>
@@ -120,7 +120,7 @@ export function PublicHeader({
               animate={{ x: 0 }}
               exit={{ x: "100%" }}
               transition={{ type: "spring", damping: 26, stiffness: 220 }}
-              className="fixed inset-y-0 right-0 z-[60] w-[min(320px,88vw)] border-l border-[#A7115F]/15 bg-gradient-to-br from-[#FFF1F7] to-[#EAF2F7] p-6 shadow-2xl backdrop-blur-[40px] md:hidden"
+              className="fixed inset-y-0 right-0 z-[60] w-[min(320px,88vw)] border-l border-[#c10089]/15 bg-gradient-to-br from-[#FFF1F7] to-[#EAF2F7] p-6 shadow-2xl backdrop-blur-[40px] md:hidden"
             >
               <div className="mb-8 flex items-center justify-between">
                 <Logo href={null} className="h-10" />

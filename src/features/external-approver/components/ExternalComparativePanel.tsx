@@ -9,6 +9,7 @@ type ProposalRow = {
 };
 
 type RifBlock = {
+  id?: string;
   summaryMarkdown: string;
   averageCents: number | null;
   comparativeJson: string;
@@ -22,8 +23,10 @@ type Props = {
 
 function parseComparative(json: string): RifComparativeRow[] {
   try {
-    const parsed = JSON.parse(json) as RifComparativeRow[];
-    return Array.isArray(parsed) ? parsed : [];
+    const parsed = JSON.parse(json) as RifComparativeRow[] | { rows?: RifComparativeRow[] };
+    if (Array.isArray(parsed)) return parsed;
+    if (parsed && Array.isArray(parsed.rows)) return parsed.rows;
+    return [];
   } catch {
     return [];
   }
@@ -78,7 +81,17 @@ export function ExternalComparativePanel({ proposals, approvedProposalId, rif }:
 
       {rif ? (
         <section className="rounded-2xl border border-black/5 bg-white/80 p-5">
-          <h2 className="font-semibold text-neutral-900">Análise RIF</h2>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="font-semibold text-neutral-900">Análise RIF</h2>
+            {rif.id ? (
+              <a
+                href={`/api/app/rif/${rif.id}`}
+                className="rounded-xl bg-[#c10089] px-3 py-1.5 text-xs font-semibold text-white"
+              >
+                Baixar RIF
+              </a>
+            ) : null}
+          </div>
           {rif.averageCents != null ? (
             <p className="mt-1 text-sm text-neutral-600">
               Média: {formatPriceCents(rif.averageCents)}

@@ -3,26 +3,26 @@
 import { revalidatePath } from "next/cache";
 import { MemberRole, OrganizationType } from "@/lib/domain/types";
 import { firestoreDb } from "@/lib/firebase/firestore-db";
-import { requireAuthorizedSession } from "@/lib/auth/guards";
 import { toPublicErrorMessage } from "@/lib/errors";
 import { writeAuditLog } from "@/lib/audit";
-import { can, getPlanGate } from "@/features/billing/plan-gate";
+import { requireCapability } from "@/lib/auth/capability";
+import { unstable_rethrow } from "next/navigation";
 
 export type ActionResult = { ok: boolean; message?: string };
 
 async function requireAdmPremium() {
-  const session = await requireAuthorizedSession({
-    types: [OrganizationType.administradora],
-    roles: [MemberRole.master],
-    href: "/app/favoritos",
-  });
-
-  const gate = await getPlanGate(session.organizationId);
-  if (!can(gate, "favorites")) {
+  try {
+    const { session } = await requireCapability({
+      types: [OrganizationType.administradora],
+      roles: [MemberRole.master],
+      href: "/app/favoritos",
+      feature: "favorites",
+    });
+    return { session, blocked: false as const };
+  } catch (error) {
+    unstable_rethrow(error);
     return { session: null as null, blocked: true as const };
   }
-
-  return { session, blocked: false as const };
 }
 
 export async function toggleFavoriteSupplierAction(formData: FormData): Promise<ActionResult> {

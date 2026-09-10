@@ -33,14 +33,14 @@ function isActivePath(pathname: string, href: string) {
 
 function SidebarBrand({ name, profile }: { name: string; profile: string }) {
   return (
-    <div className="shrink-0 border-b border-white/10 bg-[#0B1F33] pb-4">
+    <div className="shrink-0 border-b border-white/10 bg-[#00535a] pb-4">
       <div className="flex min-h-[96px] items-center justify-center px-4 pb-4 pt-5">
         <Logo href="/app" priority className="h-11 max-w-[168px]" />
       </div>
       <div className="px-4">
-        <div className="min-w-0 rounded-[14px] border border-white/15 bg-[#132F48] px-3.5 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
+        <div className="min-w-0 rounded-[14px] border border-white/20 bg-[#00aab3]/20 px-3.5 py-2.5">
           <p className="truncate text-[13px] font-bold text-white">{name}</p>
-          <p className="mt-0.5 truncate text-[10px] font-semibold uppercase tracking-[0.1em] text-[#9FB3C8]">
+          <p className="mt-0.5 truncate text-[10px] font-semibold uppercase tracking-[0.1em] text-[#B8EEF1]">
             {profile}
           </p>
         </div>
@@ -87,14 +87,14 @@ export function AppShell({ children, session, unreadNotifications = 0, features 
             href={item.href}
             onClick={() => setMobileOpen(false)}
             className={cn(
-              "group flex min-h-10 items-center gap-3 rounded-xl px-3 py-2 text-[13px] font-semibold transition-[background-color,color,box-shadow,transform] active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 focus-visible:ring-offset-2 focus-visible:ring-offset-[#102A43]",
+              "group flex min-h-10 items-center gap-3 rounded-xl px-3 py-2 text-[13px] font-semibold transition-[background-color,color,box-shadow,transform] active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 focus-visible:ring-offset-2 focus-visible:ring-offset-[#00535a]",
               active
-                ? "bg-white text-[#102A43] shadow-[0_7px_18px_-12px_rgba(3,18,32,0.9)]"
+                ? "bg-white text-[#00535a] shadow-[0_7px_18px_-12px_rgba(3,18,32,0.9)]"
                 : "text-slate-200 hover:bg-white/10 hover:text-white",
             )}
             aria-current={active ? "page" : undefined}
           >
-            <span className={cn("flex h-7 w-7 items-center justify-center rounded-lg transition-colors", active ? "bg-[#FCE7F3] text-[#A7115F]" : "bg-white/5 text-slate-300 group-hover:bg-white/10 group-hover:text-white")}>
+            <span className={cn("flex h-7 w-7 items-center justify-center rounded-lg transition-colors", active ? "bg-[#FCE7F3] text-[#c10089]" : "bg-white/5 text-slate-300 group-hover:bg-white/10 group-hover:text-white")}>
               <Icon aria-hidden="true" className="h-4 w-4 shrink-0" />
             </span>
             <span className="truncate">{item.label}</span>
@@ -108,7 +108,7 @@ export function AppShell({ children, session, unreadNotifications = 0, features 
     <div className="app-shell min-h-[100dvh] bg-[#EAF0F4]">
       <a href="#conteudo-principal" className="app-skip-link">Pular para o conteúdo</a>
       <div className="flex min-h-[100dvh]">
-        <aside className="sticky top-0 hidden h-[100dvh] w-[232px] shrink-0 flex-col overflow-hidden bg-[#102A43] shadow-[12px_0_40px_-28px_rgba(15,42,67,0.8)] md:flex">
+        <aside className="sticky top-0 hidden h-[100dvh] w-[232px] shrink-0 flex-col overflow-hidden bg-[#00535a] shadow-[12px_0_40px_-28px_rgba(15,42,67,0.8)] md:flex">
           <SidebarBrand name={session.name} profile={profile} />
           <div className="app-sidebar-nav min-h-0 flex-1 overflow-y-auto px-4 py-1">
             {nav}
@@ -137,13 +137,13 @@ export function AppShell({ children, session, unreadNotifications = 0, features 
               role="dialog"
               aria-modal="true"
               aria-label="Menu principal"
-              className="absolute inset-y-0 left-0 flex w-[272px] flex-col overflow-hidden overscroll-contain bg-[#102A43] shadow-2xl"
+              className="absolute inset-y-0 left-0 flex w-[272px] flex-col overflow-hidden overscroll-contain bg-[#00535a] shadow-2xl"
             >
               <div className="absolute right-3 top-3 z-10">
                 <button
                   type="button"
                   onClick={() => setMobileOpen(false)}
-                  className="rounded-lg border border-[#B9CAD8] bg-white p-2 text-[#102A43] shadow-sm transition-colors hover:border-[#A7115F]/35 hover:text-[#A7115F] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#A7115F]/35"
+                  className="rounded-lg border border-[#B9CAD8] bg-white p-2 text-[#00535a] shadow-sm transition-colors hover:border-[#c10089]/35 hover:text-[#c10089] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c10089]/35"
                   aria-label="Fechar"
                 >
                   <X aria-hidden="true" className="h-5 w-5" />
@@ -171,7 +171,7 @@ export function AppShell({ children, session, unreadNotifications = 0, features 
             <div className="flex min-w-0 items-center gap-2">
               <button
                 type="button"
-                className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-[#B9CAD8] bg-white text-[#102A43] shadow-sm transition-colors hover:border-[#A7115F]/40 hover:text-[#A7115F] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#A7115F]/40 md:hidden"
+                className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-[#B9CAD8] bg-white text-[#00535a] shadow-sm transition-colors hover:border-[#c10089]/40 hover:text-[#c10089] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c10089]/40 md:hidden"
                 onClick={() => setMobileOpen(true)}
                 aria-label="Abrir menu"
                 aria-expanded={mobileOpen}
@@ -180,14 +180,14 @@ export function AppShell({ children, session, unreadNotifications = 0, features 
                 <Menu aria-hidden="true" className="h-5 w-5" />
               </button>
               <div className="min-w-0">
-                <p className="truncate text-sm font-bold text-[#102A43]">{session.organizationName}</p>
+                <p className="truncate text-sm font-bold text-[#00535a]">{session.organizationName}</p>
                 <p className="truncate text-xs text-slate-500">{session.email}</p>
               </div>
             </div>
             <div className="flex items-center gap-2.5">
               <NotificationBell unreadCount={unreadNotifications} />
               <div className="hidden text-right sm:block">
-                <p className="text-sm font-bold text-[#102A43]">{session.name}</p>
+                <p className="text-sm font-bold text-[#00535a]">{session.name}</p>
                 <p className="text-xs font-medium text-slate-500">{profile}</p>
               </div>
               <Mascot variant="avatar" className="h-9 w-9" />

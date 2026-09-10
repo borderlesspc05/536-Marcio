@@ -3,13 +3,45 @@ import { createNotification, notifyOrgMembers } from "@/features/notifications/s
 import { sendTemplatedEmail } from "@/features/notifications/email-provider";
 import { creditReferralOnPaidUpgrade } from "@/features/referrals/rewards";
 
-type EmitInput = {
+export type DomainEventInput = {
   type: string;
   entityType: string;
   entityId: string;
   organizationId?: string | null;
   payload?: Record<string, unknown>;
 };
+
+/** @deprecated use DomainEventInput */
+type EmitInput = DomainEventInput;
+
+type DbLike = {
+  domainEvent: {
+    create: (args: { data: Record<string, unknown> }) => Promise<{
+      type: string;
+      entityType: string;
+      entityId: string;
+      organizationId?: string | null;
+      payload?: string | null;
+    }>;
+  };
+};
+
+/**
+ * Persiste o Domain Event sem side-effects.
+ * Preferir emitDomainEvent; use isto só quando o caller precisa agrupar writes
+ * e em seguida chamar notifyAfterDomainEvent / dispatchDomainEvent.
+ */
+export async function recordDomainEvent(db: DbLike, input: DomainEventInput) {
+  return db.domainEvent.create({
+    data: {
+      type: input.type,
+      entityType: input.entityType,
+      entityId: input.entityId,
+      organizationId: input.organizationId ?? null,
+      payload: input.payload ? JSON.stringify(input.payload) : null,
+    },
+  });
+}
 
 function asString(value: unknown): string | undefined {
   return typeof value === "string" ? value : undefined;
@@ -19,16 +51,9 @@ function asNumber(value: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 }
 
-export async function emitDomainEvent(input: EmitInput) {
-  const event = await firestoreDb.domainEvent.create({
-    data: {
-      type: input.type,
-      entityType: input.entityType,
-      entityId: input.entityId,
-      organizationId: input.organizationId ?? null,
-      payload: input.payload ? JSON.stringify(input.payload) : null,
-    },
-  });
+/** Seam único: persiste Domain Event e dispara notify/email/referral. */
+export async function emitDomainEvent(input: DomainEventInput) {
+  const event = await recordDomainEvent(firestoreDb, input);
 
   await dispatchDomainEvent({
     type: event.type,
@@ -351,6 +376,57 @@ export async function dispatchDomainEvent(input: {
       });
       break;
     }
+    case "invite.reinforced": {
+      const supplierOrgId = asString(payload.supplierOrgId) ?? input.organizationId;
+      const inviteId = input.entityId;
+      const publicId = asString(payload.publicId) ?? "";
+      if (!supplierOrgId) break;
+      await notifyOrgMembers(supplierOrgId, {
+        type: input.type,
+        title: "Pedido reforçado pelo solicitante",
+        body: publicId
+          ? `A cotação ${publicId} aguarda sua proposta. Por favor, responda em breve.`
+          : "O solicitante reforçou um pedido de cotação.",
+        href: `/app/oportunidades?inviteId=${inviteId}`,
+        metadata: payload,
+      });
+      const members = await firestoreDb.organizationMember.findMany({
+        where: { organizationId: supplierOrgId },
+        include: { user: true },
+      });
+      for (const member of members) {
+        await sendTemplatedEmail({
+          toEmail: member.user.email,
+          subject: publicId
+            ? `CotaCondo — reforço de pedido (${publicId})`
+            : "CotaCondo — reforço de pedido",
+          bodyText: `Olá ${member.user.name},\n\nO solicitante reforçou o pedido da cotação ${publicId || inviteId}. Envie a proposta ou decline a oportunidade.\n`,
+          template: "quotation_invite",
+          metadata: { inviteId, quotationId },
+        });
+      }
+      break;
+    }
+    case "invite.declined": {
+      const solicitanteOrgId = asString(payload.solicitanteOrgId);
+      if (solicitanteOrgId) {
+        await notifyOrgMembers(solicitanteOrgId, {
+          type: input.type,
+          title: "Convite declinado",
+          body: asString(payload.reason) ?? "Um fornecedor declinou a oportunidade.",
+          href: hrefQuotation,
+          metadata: payload,
+        });
+      }
+      break;
+    }
+    case "checkout.paid":
+    case "quotation.created":
+    case "distribution.completed":
+    case "quotation.max_proposals_reached":
+    case "negotiation.counter_offer":
+      // Persistidos para auditoria; side-effects adicionais entram aqui quando existirem.
+      break;
     default:
       break;
   }

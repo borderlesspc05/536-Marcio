@@ -1,6 +1,7 @@
 /**
- * Dispara side-effects de notificação/e-mail a partir de um domain event já persistido.
- * Use após commits de transação (tx.domainEvent.create).
+ * Dispara side-effects a partir de um Domain Event já persistido.
+ * Preferir `emitDomainEvent` (persist + dispatch). Use isto só quando o evento
+ * já foi gravado via `recordDomainEvent` antes do dispatch.
  */
 export async function notifyAfterDomainEvent(input: {
   type: string;

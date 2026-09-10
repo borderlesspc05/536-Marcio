@@ -88,3 +88,43 @@ export async function storeProposalConditionAttachment(input: {
   );
   return storeFile(objectPath, input.file);
 }
+
+/** Lê arquivo gravado via store* (gs:// ou local://). */
+export async function readStoredFile(storagePath: string): Promise<{
+  buffer: Buffer;
+  contentType: string;
+  fileName: string;
+}> {
+  if (storagePath.startsWith("local://")) {
+    const relative = storagePath.replace(/^local:\/\//, "");
+    const absolute = path.isAbsolute(relative) ? relative : path.join(process.cwd(), relative);
+    const { readFile } = await import("fs/promises");
+    const buffer = await readFile(absolute);
+    return {
+      buffer,
+      contentType: "application/octet-stream",
+      fileName: path.basename(absolute),
+    };
+  }
+
+  if (storagePath.startsWith("gs://")) {
+    if (!isFirebaseAdminConfigured()) {
+      throw new Error("Firebase Admin necessário para ler anexos no Storage.");
+    }
+    const withoutScheme = storagePath.slice("gs://".length);
+    const slash = withoutScheme.indexOf("/");
+    const bucketName = withoutScheme.slice(0, slash);
+    const objectPath = withoutScheme.slice(slash + 1);
+    const bucket = getAdminStorage().bucket(bucketName);
+    const file = bucket.file(objectPath);
+    const [buffer] = await file.download();
+    const [metadata] = await file.getMetadata();
+    return {
+      buffer,
+      contentType: String(metadata.contentType || "application/octet-stream"),
+      fileName: path.basename(objectPath),
+    };
+  }
+
+  throw new Error("Caminho de armazenamento inválido.");
+}

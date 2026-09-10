@@ -1,16 +1,18 @@
 # Deploy Firebase — CotaCondo
 
-Projeto Firebase: **`marcio-ab7d9`**
+Projeto Firebase: **`marcio-ab7d9`** · plano **Spark (grátis)** até haver Blaze pago
 
-## Arquitetura (Spark-compatible)
+## Arquitetura (Spark)
 
 | Camada | Onde | URL |
 |--------|------|-----|
 | Landing estática (marketing) | Firebase Hosting | https://marcio-ab7d9.web.app |
-| App Next.js (login, `/app`, API) | Vercel | https://cotacondo-marcio.vercel.app |
-| Auth / Storage / Rules | Firebase | Console `marcio-ab7d9` |
+| App Next.js (login, `/app`, API) | Vercel | https://536-marcio.vercel.app |
+| Auth / Firestore / Rules | Firebase Spark | Console `marcio-ab7d9` |
 
-> **Por quê não App Hosting?** Firebase App Hosting / `frameworksBackend` exigem plano **Blaze**. No Spark, o Next fica na Vercel e o Firebase serve a LP + regras + Storage.
+> **Spark vs Blaze:** App Hosting / `frameworksBackend` / vários Cloud Functions exigem **Blaze**. Enquanto estivermos no Spark: Next na Vercel; Firebase = Auth + Firestore + Hosting LP + rules. Sem Cloud Functions de produção.
+
+> Conta CLI: o deploy de Hosting exige login Google **com IAM no projeto `marcio-ab7d9`**. Sem acesso, só a Vercel atualiza o app.
 
 CTAs da landing apontam para a app via `hosting-static/js/config.js` → `appUrl`.
 
@@ -75,11 +77,11 @@ Arquivo de config: `firebase.json`
 ## Pós-deploy (checklist)
 
 1. Abrir https://marcio-ab7d9.web.app e validar a landing
-2. Clicar em **Acesse / Cadastro** → deve ir para `https://cotacondo-marcio.vercel.app`
+2. Clicar em **Acesse / Cadastro** → deve ir para `https://536-marcio.vercel.app`
 3. Firebase Console → Authentication → Settings → **Authorized domains**:
    - `marcio-ab7d9.web.app`
    - `marcio-ab7d9.firebaseapp.com`
-   - `cotacondo-marcio.vercel.app`
+   - `536-marcio.vercel.app`
    - domínio customizado (quando houver)
 4. Se alterou `appUrl` em `hosting-static/js/config.js`, redeployar só hosting
 
@@ -104,7 +106,9 @@ Essas telas rodam na **Vercel**:
 | URL | O que é |
 |-----|---------|
 | https://marcio-ab7d9.web.app | Landing estática (Firebase) |
-| https://cotacondo-marcio.vercel.app | App Next completa |
+| https://536-marcio.vercel.app | App Next completa |
+
+Env na Vercel (obrigatório): `AUTH_SECRET`, `NEXT_PUBLIC_FIREBASE_*`, `FIREBASE_SERVICE_ACCOUNT_JSON` do Admin **marcio-ab7d9** (não de outro projeto).
 
 Para publicar as mudanças do app:
 

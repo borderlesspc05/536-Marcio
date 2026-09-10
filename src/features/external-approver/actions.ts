@@ -265,8 +265,9 @@ export async function inviteExternalApproverAction(formData: FormData): Promise<
     const { hashPassword } = await import("@/lib/auth/password");
 
     let user = await firestoreDb.user.findUnique({ where: { email } });
+    let tempPassword: string | null = null;
     if (!user) {
-      const tempPassword = `Aprovador@${randomBytes(3).toString("hex")}`;
+      tempPassword = `Aprovador@${randomBytes(3).toString("hex")}`;
       user = await firestoreDb.user.create({
         data: {
           email,
@@ -314,11 +315,39 @@ export async function inviteExternalApproverAction(formData: FormData): Promise<
       action: "external_approver.invited",
       entityType: "User",
       entityId: user.id,
-      metadata: { email, condominiumIds },
+      metadata: { email, condominiumIds, createdUser: Boolean(tempPassword) },
     });
 
+    if (tempPassword) {
+      const { sendTemplatedEmail } = await import("@/features/notifications/email-provider");
+      const portalHint = serviceClient?.solicitationLinkSlug
+        ? `\nPortal: /s/${serviceClient.solicitationLinkSlug} ou /acesse`
+        : "\nAcesse /acesse para entrar.";
+      await sendTemplatedEmail({
+        toEmail: email,
+        subject: "CotaCondo — acesso de Aprovador Externo",
+        bodyText: [
+          `Olá ${name},`,
+          "",
+          "Você foi cadastrado(a) como Aprovador Externo.",
+          `E-mail: ${email}`,
+          `Senha temporária: ${tempPassword}`,
+          portalHint,
+          "",
+          "Altere a senha após o primeiro acesso, se disponível.",
+        ].join("\n"),
+        template: "external_approver_invite",
+        metadata: { userId: user.id, organizationId: session.organizationId },
+      });
+    }
+
     revalidatePath("/app/equipe");
-    return { ok: true, message: "Aprovador externo cadastrado." };
+    return {
+      ok: true,
+      message: tempPassword
+        ? `Aprovador cadastrado. Senha temporária (envie ao aprovador): ${tempPassword}`
+        : "Aprovador externo vinculado (usuário já existia — use a senha atual).",
+    };
   } catch (error) {
     return { ok: false, message: toPublicErrorMessage(error) };
   }

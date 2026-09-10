@@ -307,10 +307,11 @@ async function main() {
   ];
 
   for (const plan of plans) {
+    const payload = { ...plan, isActive: true };
     await firestoreDb.plan.upsert({
       where: { slug: plan.slug },
-      update: plan,
-      create: plan,
+      update: payload,
+      create: payload,
     });
   }
 

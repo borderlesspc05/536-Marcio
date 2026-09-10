@@ -17,6 +17,7 @@ import {
   SERVICE_PIPELINE_ORDER,
 } from "@/features/master-service/pipeline";
 import { Button } from "@/components/ui/Button";
+import { StatusShareChart } from "@/components/app/StatusShareChart";
 
 type DashCard = {
   title: string;
@@ -221,7 +222,7 @@ export default async function AppHomePage() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <p className="text-sm font-semibold uppercase tracking-wide text-[#9333EA]">Dashboard</p>
+          <p className="text-sm font-semibold uppercase tracking-wide text-[#c10089]">Dashboard</p>
           <h1 className="mt-1 text-3xl font-bold tracking-tight text-neutral-900">
             Olá, {session.name}
           </h1>
@@ -282,7 +283,7 @@ export default async function AppHomePage() {
               <p className="mt-2 text-3xl font-bold text-neutral-900">{card.value}</p>
               {card.hint ? <p className="mt-1 text-xs text-neutral-400">{card.hint}</p> : null}
               {card.href ? (
-                <p className="mt-3 text-xs font-semibold text-[#9333EA]">Abrir →</p>
+                <p className="mt-3 text-xs font-semibold text-[#c10089]">Abrir →</p>
               ) : null}
             </>
           );
@@ -290,7 +291,7 @@ export default async function AppHomePage() {
             <Link
               key={card.title}
               href={card.href}
-              className="rounded-2xl border border-black/5 bg-white/80 p-5 shadow-sm backdrop-blur transition hover:border-[#9333EA]/30 hover:shadow-md"
+              className="rounded-2xl border border-black/5 bg-white/80 p-5 shadow-sm backdrop-blur transition hover:border-[#c10089]/30 hover:shadow-md"
             >
               {inner}
             </Link>
@@ -304,6 +305,42 @@ export default async function AppHomePage() {
           );
         })}
       </div>
+
+      {isSolicitante && kpis ? (
+        <StatusShareChart
+          title="Cotações por status (%)"
+          items={[
+            { label: "Abertas", value: kpis.openQuotations, color: "#00aab3" },
+            { label: "Em negociação", value: kpis.inNegotiation, color: "#c10089" },
+            { label: "Aprovadas", value: kpis.approved, color: "#059669" },
+            { label: "Recusadas", value: kpis.rejected, color: "#e11d48" },
+          ]}
+        />
+      ) : null}
+
+      {isFornecedor && supplierKpis ? (
+        <StatusShareChart
+          title="Oportunidades por status (%)"
+          items={[
+            { label: "Pendentes", value: supplierKpis.pendingOpportunities, color: "#00aab3" },
+            { label: "Em negociação", value: supplierKpis.inNegotiation, color: "#c10089" },
+            { label: "Enviadas", value: supplierKpis.proposalsSent, color: "#00535a" },
+            { label: "Aprovadas", value: supplierKpis.approved, color: "#059669" },
+            { label: "Recusadas", value: supplierKpis.rejected, color: "#e11d48" },
+          ]}
+        />
+      ) : null}
+
+      {isMasterService && serviceCounts ? (
+        <StatusShareChart
+          title="Pipeline Service por status (%)"
+          items={SERVICE_PIPELINE_ORDER.map((status, index) => ({
+            label: SERVICE_PIPELINE_LABELS[status],
+            value: serviceCounts[status] ?? 0,
+            color: ["#00aab3", "#c10089", "#00535a", "#059669", "#e11d48", "#9333ea"][index % 6]!,
+          }))}
+        />
+      ) : null}
 
       {supplierKpis && supplierKpis.overdueDocuments > 0 ? (
         <div className="rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-800">

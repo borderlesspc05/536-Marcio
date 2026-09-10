@@ -39,6 +39,7 @@ export default async function ExternalApproverQuotationDetailPage({ params }: Pa
         rif={
           rif
             ? {
+                id: rif.id,
                 summaryMarkdown: rif.summaryMarkdown,
                 averageCents: rif.averageCents,
                 comparativeJson: rif.comparativeJson,

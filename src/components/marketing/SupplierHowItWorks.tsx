@@ -21,7 +21,7 @@ export function SupplierHowItWorks() {
     <section className="pb-12" aria-labelledby="supplier-how-title">
       <Container>
         <div className="rounded-2xl border border-[#D9E2EC] bg-white/90 p-6 shadow-[0_20px_55px_-42px_rgba(16,42,67,0.75)] sm:p-8">
-          <h2 id="supplier-how-title" className="text-2xl font-extrabold text-[#102A43]">
+          <h2 id="supplier-how-title" className="text-2xl font-extrabold text-[#00535a]">
             Como funciona
           </h2>
           <ol className="mt-6 grid gap-4 sm:grid-cols-3">
@@ -35,15 +35,15 @@ export function SupplierHowItWorks() {
                   viewport={{ once: true, amount: 0.35 }}
                   transition={{ duration: 0.55, delay: index * 0.1, ease: [0.16, 1, 0.3, 1] }}
                   whileHover={reduceMotion ? undefined : { y: -5 }}
-                  className="group relative overflow-hidden rounded-2xl border border-[#D9E2EC] bg-[#F7FAFC] p-5 transition-colors hover:border-[#A7115F]/30 hover:bg-[#FFF7FB]"
+                  className="group relative overflow-hidden rounded-2xl border border-[#D9E2EC] bg-[#F7FAFC] p-5 transition-colors hover:border-[#c10089]/30 hover:bg-[#FFF7FB]"
                 >
                   <div className="flex items-center justify-between">
-                    <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#A7115F] text-white shadow-[0_10px_20px_-12px_rgba(167,17,95,0.8)]">
+                    <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#c10089] text-white shadow-[0_10px_20px_-12px_rgba(193, 0, 137,0.8)]">
                       <Icon className="h-5 w-5" aria-hidden />
                     </span>
-                    <span className="text-3xl font-extrabold text-[#A7115F]/15">0{index + 1}</span>
+                    <span className="text-3xl font-extrabold text-[#c10089]/15">0{index + 1}</span>
                   </div>
-                  <h3 className="mt-5 font-bold text-[#102A43]">{item.title}</h3>
+                  <h3 className="mt-5 font-bold text-[#00535a]">{item.title}</h3>
                   <p className="mt-1 text-sm leading-relaxed text-[#526D82]">{item.text}</p>
                 </motion.li>
               );

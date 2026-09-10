@@ -33,11 +33,11 @@ export function NavigationProgress() {
 
   return (
     <div
-      className="pointer-events-none fixed inset-x-0 top-0 z-[100] h-1 overflow-hidden bg-transparent"
+      className="pointer-events-none fixed inset-x-0 top-0 z-[100] h-1.5 overflow-hidden bg-transparent"
       aria-hidden="true"
     >
       <div
-        className="h-full origin-left rounded-r-full bg-[linear-gradient(90deg,#A7115F_0%,#9333EA_55%,#087F8C_100%)] shadow-[0_0_12px_rgba(167,17,95,0.45)] transition-[width] duration-200 ease-out"
+        className="h-full origin-left rounded-r-full bg-[linear-gradient(90deg,#c10089_0%,#00aab3_100%)] shadow-[0_0_14px_rgba(193,0,137,0.5)] transition-[width] duration-200 ease-out"
         style={{ width: `${progress}%` }}
       />
     </div>

@@ -11,7 +11,10 @@ export const acceptInviteSchema = z.object({
 
 const conditionSchema = z.object({
   amountCents: z.number().int().positive("Valor deve ser maior que zero."),
-  paymentTerms: z.string().trim().min(2, "Informe a condição de pagamento."),
+  paymentTerms: z
+    .string()
+    .trim()
+    .min(1, "Informe a condição de pagamento (ex.: à vista, 30 dias)."),
 });
 
 export const submitProposalSchema = z.object({

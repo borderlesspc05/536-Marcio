@@ -1,4 +1,5 @@
 import { firestoreDb } from "@/lib/firebase/firestore-db";
+import { emitDomainEvent } from "@/lib/domain-events";
 
 export type FranchiseBalance = {
   yearMonth: string;
@@ -87,7 +88,7 @@ export async function createQuotationConsumingFranchise(input: {
 }) {
   const yearMonth = currentYearMonth();
 
-  return firestoreDb.$transaction(async (tx) => {
+  const quotation = await firestoreDb.$transaction(async (tx) => {
     const [settings, override, subscription, usage] = await Promise.all([
       tx.platformSettings.findUnique({ where: { id: "default" } }),
       tx.planOverride.findUnique({ where: { organizationId: input.organizationId } }),
@@ -129,7 +130,7 @@ export async function createQuotationConsumingFranchise(input: {
       update: { usedCount: { increment: 1 } },
     });
 
-    const quotation = await tx.quotation.create({
+    return tx.quotation.create({
       data: {
         publicId: input.publicId,
         organizationId: input.organizationId,
@@ -144,17 +145,15 @@ export async function createQuotationConsumingFranchise(input: {
         createdByUserId: input.createdByUserId,
       },
     });
-
-    await tx.domainEvent.create({
-      data: {
-        type: "quotation.created",
-        entityType: "quotation",
-        entityId: quotation.id,
-        organizationId: input.organizationId,
-        payload: JSON.stringify({ publicId: quotation.publicId }),
-      },
-    });
-
-    return quotation;
   });
+
+  await emitDomainEvent({
+    type: "quotation.created",
+    entityType: "quotation",
+    entityId: quotation.id,
+    organizationId: input.organizationId,
+    payload: { publicId: quotation.publicId },
+  });
+
+  return quotation;
 }

@@ -119,7 +119,7 @@ export default function HomePage() {
   });
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_10%_8%,rgba(167,17,95,0.09),transparent_32%),radial-gradient(circle_at_90%_12%,rgba(8,127,140,0.08),transparent_28%),#ffffff]">
+    <div className="min-h-screen bg-[radial-gradient(circle_at_10%_8%,rgba(193, 0, 137,0.09),transparent_32%),radial-gradient(circle_at_90%_12%,rgba(0, 170, 179,0.08),transparent_28%),#ffffff]">
       <PublicHeader blogUrl={marketing.blogUrl} />
       <main>
         <LandingHero />

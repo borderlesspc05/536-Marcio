@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { randomUUID } from "node:crypto";
-import { FieldValue, Timestamp } from "firebase-admin/firestore";
+import { FieldValue, Timestamp, type Query } from "firebase-admin/firestore";
 import { getAdminFirestore } from "@/lib/firebase/admin";
 
 type Relation = {
@@ -251,6 +251,7 @@ const RELATIONS: Record<string, Record<string, Relation>> = {
 
 const DEFAULTS: Record<string, Record<string, unknown>> = {
   subscription: { status: "active", cancelAtPeriodEnd: false },
+  plan: { isActive: true, billingInterval: "monthly", sortOrder: 0, currency: "BRL" },
   serviceCategory: { colorToken: "neutral", sortOrder: 0, isActive: true },
   serviceItem: { isMandatory: false, sortOrder: 0, isActive: true },
   complianceDocument: { sizeBytes: 0, status: "em_analise" },
@@ -370,6 +371,11 @@ async function matchesWhere(model: string, record: any, where?: Record<string, a
           for (const item of list) if (!(await matchesWhere(relation.model, item, condition.every))) return false;
         }
       } else {
+        // Prisma: `relation: null` / `{ is: null }` = registro sem relação.
+        if (condition === null || condition?.is === null || condition?.equals === null) {
+          if (related) return false;
+          continue;
+        }
         const nested = condition?.is ?? condition;
         if (!related || !(await matchesWhere(relation.model, related, nested))) return false;
       }
@@ -411,27 +417,32 @@ async function shapeRecord(model: string, record: any, args: any = {}): Promise<
     }
   }
 
-  for (const [key, selection] of Object.entries(relationShape ?? {})) {
-    if (!selection || key === "_count") continue;
-    const relation = RELATIONS[model]?.[key];
-    if (!relation) continue;
-    const related = await relationValue(model, record, relation);
-    const nestedArgs: any = selection === true ? {} : selection;
-    if (relation.many) {
-      let list = related as any[];
-      if (nestedArgs.where) {
-        const filtered: any[] = [];
-        for (const item of list) if (await matchesWhere(relation.model, item, nestedArgs.where)) filtered.push(item);
-        list = filtered;
+  const relationEntries = Object.entries(relationShape ?? {}).filter(
+    ([key, selection]) => selection && key !== "_count",
+  );
+
+  await Promise.all(
+    relationEntries.map(async ([key, selection]) => {
+      const relation = RELATIONS[model]?.[key];
+      if (!relation) return;
+      const related = await relationValue(model, record, relation);
+      const nestedArgs: any = selection === true ? {} : selection;
+      if (relation.many) {
+        let list = related as any[];
+        if (nestedArgs.where) {
+          const filtered: any[] = [];
+          for (const item of list) if (await matchesWhere(relation.model, item, nestedArgs.where)) filtered.push(item);
+          list = filtered;
+        }
+        list = sortRecords(list, nestedArgs.orderBy);
+        if (nestedArgs.skip) list = list.slice(nestedArgs.skip);
+        if (nestedArgs.take) list = list.slice(0, nestedArgs.take);
+        result[key] = await Promise.all(list.map((item) => shapeRecord(relation.model, item, nestedArgs)));
+      } else {
+        result[key] = related ? await shapeRecord(relation.model, related, nestedArgs) : null;
       }
-      list = sortRecords(list, nestedArgs.orderBy);
-      if (nestedArgs.skip) list = list.slice(nestedArgs.skip);
-      if (nestedArgs.take) list = list.slice(0, nestedArgs.take);
-      result[key] = await Promise.all(list.map((item) => shapeRecord(relation.model, item, nestedArgs)));
-    } else {
-      result[key] = related ? await shapeRecord(relation.model, related, nestedArgs) : null;
-    }
-  }
+    }),
+  );
 
   const countSelection = relationShape?._count;
   if (countSelection) {
@@ -439,18 +450,20 @@ async function shapeRecord(model: string, record: any, args: any = {}): Promise<
     const selections: Record<string, any> = countSelection === true
       ? RELATIONS[model] ?? {}
       : countSelection.select ?? {};
-    for (const [key, options] of Object.entries(selections)) {
-      const relation = RELATIONS[model]?.[key];
-      if (!relation) continue;
-      let related = await relationValue(model, record, relation);
-      const where = typeof options === "object" ? (options as any).where : undefined;
-      if (where && Array.isArray(related)) {
-        const filtered: any[] = [];
-        for (const item of related) if (await matchesWhere(relation.model, item, where)) filtered.push(item);
-        related = filtered;
-      }
-      result._count[key] = Array.isArray(related) ? related.length : related ? 1 : 0;
-    }
+    await Promise.all(
+      Object.entries(selections).map(async ([key, options]) => {
+        const relation = RELATIONS[model]?.[key];
+        if (!relation) return;
+        let related = await relationValue(model, record, relation);
+        const where = typeof options === "object" ? (options as any).where : undefined;
+        if (where && Array.isArray(related)) {
+          const filtered: any[] = [];
+          for (const item of related) if (await matchesWhere(relation.model, item, where)) filtered.push(item);
+          related = filtered;
+        }
+        result._count[key] = Array.isArray(related) ? related.length : related ? 1 : 0;
+      }),
+    );
   }
   return result;
 }
@@ -458,6 +471,61 @@ async function shapeRecord(model: string, record: any, args: any = {}): Promise<
 async function allRecords(model: string): Promise<any[]> {
   const snapshot = await getAdminFirestore().collection(collectionName(model)).get();
   return snapshot.docs.map((doc) => ({ id: doc.id, ...fromFirestore(doc.data()) }));
+}
+
+function equalityValue(condition: any): { ok: true; value: any } | { ok: false } {
+  if (condition === undefined) return { ok: false };
+  if (condition === null || typeof condition !== "object" || condition instanceof Date || Array.isArray(condition)) {
+    return { ok: true, value: condition };
+  }
+  if ("equals" in condition && Object.keys(condition).length === 1) {
+    return { ok: true, value: condition.equals };
+  }
+  return { ok: false };
+}
+
+/** Extrai filtros de igualdade simples (sem AND/OR/NOT/relações) para query Firestore. */
+function simpleEqualityFilters(where?: Record<string, any>): Record<string, any> | null {
+  if (!where) return {};
+  if (where.AND || where.OR || where.NOT) return null;
+  const filters: Record<string, any> = {};
+  for (const [key, condition] of Object.entries(where)) {
+    if (key.includes("_")) return null;
+    const eq = equalityValue(condition);
+    if (!eq.ok) return null;
+    filters[key] = eq.value;
+  }
+  return filters;
+}
+
+async function loadCandidateRecords(model: string, where?: Record<string, any>): Promise<any[]> {
+  const filters = simpleEqualityFilters(where);
+  const col = getAdminFirestore().collection(collectionName(model));
+
+  // Preferir get por id mesmo com outros filtros (matchesWhere valida o restante).
+  if (where?.id != null) {
+    const idEq = equalityValue(where.id);
+    if (idEq.ok && typeof idEq.value === "string" && idEq.value) {
+      const snap = await col.doc(idEq.value).get();
+      if (!snap.exists) return [];
+      return [{ id: snap.id, ...fromFirestore(snap.data()) }];
+    }
+  }
+
+  if (filters && Object.keys(filters).length > 0) {
+    try {
+      let query: Query = col;
+      for (const [field, value] of Object.entries(filters)) {
+        query = query.where(field, "==", value);
+      }
+      const snapshot = await query.get();
+      return snapshot.docs.map((doc) => ({ id: doc.id, ...fromFirestore(doc.data()) }));
+    } catch {
+      // Índice composto ausente ou tipo incompatível — cai no scan completo.
+    }
+  }
+
+  return allRecords(model);
 }
 
 async function prepareCreate(model: string, input: any, forcedId?: string): Promise<any> {
@@ -500,7 +568,7 @@ async function prepareCreate(model: string, input: any, forcedId?: string): Prom
 function delegateFor(model: string) {
   return {
     async findMany(args: any = {}) {
-      const records = await allRecords(model);
+      const records = await loadCandidateRecords(model, args.where);
       const filtered: any[] = [];
       for (const record of records) if (await matchesWhere(model, record, args.where)) filtered.push(record);
       let result = sortRecords(filtered, args.orderBy);
@@ -641,6 +709,11 @@ export const firestoreDb: any = new Proxy(
     async $disconnect() {
       // O Admin SDK gerencia seu próprio pool de conexões.
     },
+    /**
+     * Spark / Admin SDK: NÃO é transação Firestore real.
+     * Interactive form só reutiliza o mesmo firestoreDb; array form = Promise.all.
+     * Não assuma atomicidade multi-doc — use claim por status (ex.: checkout paid) quando preciso.
+     */
     async $transaction(input: any) {
       if (typeof input === "function") return input(firestoreDb);
       return Promise.all(input);

@@ -3,10 +3,10 @@ import { requireAuthorizedSession } from "@/lib/auth/guards";
 import { firestoreDb } from "@/lib/firebase/firestore-db";
 import { inviteTeamMemberAction } from "@/features/referrals/actions";
 import {
-  inviteExternalApproverAction,
   removeExternalApproverAction,
   updateExternalApproverScopesAction,
 } from "@/features/external-approver/actions";
+import { InviteExternalApproverForm } from "@/features/external-approver/components/InviteExternalApproverForm";
 import { formAction } from "@/lib/form-action";
 import { Button } from "@/components/ui/Button";
 
@@ -48,7 +48,7 @@ export default async function EquipePage() {
   return (
     <div className="space-y-6">
       <div>
-        <p className="text-sm font-semibold uppercase tracking-wide text-[#9333EA]">Equipe</p>
+        <p className="text-sm font-semibold uppercase tracking-wide text-[#c10089]">Equipe</p>
         <h1 className="mt-1 text-3xl font-bold text-neutral-900">Usuários da administradora</h1>
         <p className="mt-2 text-neutral-600">
           Master convida operacionais, outros masters e aprovadores externos (síndicos).
@@ -130,39 +130,11 @@ export default async function EquipePage() {
             <h2 className="font-semibold">Cadastrar Aprovador Externo</h2>
             <p className="mt-1 text-sm text-neutral-600">
               Perfil com acesso restrito às cotações e calendário dos condomínios selecionados.
+              A senha temporária aparece na tela e também é enviada por e-mail.
             </p>
-            <form
-              action={formAction(inviteExternalApproverAction)}
-              className="mt-4 grid gap-3 md:grid-cols-2"
-            >
-              <label className="text-sm">
-                Nome
-                <input name="name" required className="mt-1 h-10 w-full rounded-xl border border-black/10 px-3" />
-              </label>
-              <label className="text-sm">
-                E-mail
-                <input
-                  name="email"
-                  type="email"
-                  required
-                  className="mt-1 h-10 w-full rounded-xl border border-black/10 px-3"
-                />
-              </label>
-              <fieldset className="md:col-span-2 text-sm">
-                <legend className="font-medium">Condomínios vinculados *</legend>
-                <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                  {condominiums.map((condo) => (
-                    <label key={condo.id} className="flex items-center gap-2 rounded-lg bg-white px-3 py-2">
-                      <input type="checkbox" name="condominiumIds" value={condo.id} />
-                      {condo.name}
-                    </label>
-                  ))}
-                </div>
-              </fieldset>
-              <div className="md:col-span-2">
-                <Button type="submit">Cadastrar aprovador</Button>
-              </div>
-            </form>
+            <InviteExternalApproverForm
+              condominiums={condominiums.map((condo) => ({ id: condo.id, name: condo.name }))}
+            />
           </div>
 
           {externalApprovers.length > 0 ? (

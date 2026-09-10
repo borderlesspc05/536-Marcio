@@ -4,13 +4,25 @@ import { revalidatePath } from "next/cache";
 import { MemberRole, OrganizationType } from "@/lib/domain/types";
 import { z } from "zod";
 import { firestoreDb } from "@/lib/firebase/firestore-db";
-import { requireAuthorizedSession } from "@/lib/auth/guards";
+import { requireCapability } from "@/lib/auth/capability";
 import { toPublicErrorMessage } from "@/lib/errors";
 import { writeAuditLog } from "@/lib/audit";
 import { can, getPlanGate } from "@/features/billing/plan-gate";
 import { yearMonth } from "@/features/billing/subscriptions";
+import { emitDomainEvent } from "@/lib/domain-events";
 
 export type ActionResult = { ok: boolean; message?: string };
+
+async function requireCommissionsCapability() {
+  const { session } = await requireCapability({
+    types: [OrganizationType.administradora],
+    roles: [MemberRole.master],
+    href: "/app/financeiro",
+    feature: "commissions",
+    featureMessage: "Comissões disponíveis no plano Premium.",
+  });
+  return session;
+}
 
 const agreementSchema = z.object({
   supplierOrgId: z.string().min(1),
@@ -23,16 +35,7 @@ const agreementSchema = z.object({
 
 export async function createCommissionAgreementAction(formData: FormData): Promise<ActionResult> {
   try {
-    const session = await requireAuthorizedSession({
-      types: [OrganizationType.administradora],
-      roles: [MemberRole.master],
-      href: "/app/financeiro",
-    });
-
-    const gate = await getPlanGate(session.organizationId);
-    if (!can(gate, "commissions")) {
-      return { ok: false, message: "Comissões disponíveis no plano Premium." };
-    }
+    const session = await requireCommissionsCapability();
 
     const parsed = agreementSchema.safeParse({
       supplierOrgId: formData.get("supplierOrgId"),
@@ -99,16 +102,7 @@ export async function updateCommissionAgreementFormAction(
 
 export async function updateCommissionAgreementAction(formData: FormData): Promise<ActionResult> {
   try {
-    const session = await requireAuthorizedSession({
-      types: [OrganizationType.administradora],
-      roles: [MemberRole.master],
-      href: "/app/financeiro",
-    });
-
-    const gate = await getPlanGate(session.organizationId);
-    if (!can(gate, "commissions")) {
-      return { ok: false, message: "Comissões disponíveis no plano Premium." };
-    }
+    const session = await requireCommissionsCapability();
 
     const id = String(formData.get("id") ?? "");
     const feeType = String(formData.get("feeType") ?? "");
@@ -156,16 +150,7 @@ export async function deleteCommissionAgreementFormAction(
 
 export async function deleteCommissionAgreementAction(formData: FormData): Promise<ActionResult> {
   try {
-    const session = await requireAuthorizedSession({
-      types: [OrganizationType.administradora],
-      roles: [MemberRole.master],
-      href: "/app/financeiro",
-    });
-
-    const gate = await getPlanGate(session.organizationId);
-    if (!can(gate, "commissions")) {
-      return { ok: false, message: "Comissões disponíveis no plano Premium." };
-    }
+    const session = await requireCommissionsCapability();
 
     const id = String(formData.get("id") ?? "");
     if (!id) return { ok: false, message: "Acordo inválido." };
@@ -242,24 +227,7 @@ export async function recordCommissionFromApproval(input: {
     },
   });
 
-  await firestoreDb.domainEvent.create({
-    data: {
-      type: "commission.expected",
-      entityType: "commission_entry",
-      entityId: entry.id,
-      organizationId: input.administradoraOrgId,
-      payload: JSON.stringify({
-        commissionCents,
-        volumeCents: input.volumeCents,
-        quotationId: input.quotationId,
-        administradoraOrgId: input.administradoraOrgId,
-        supplierOrgId: input.supplierOrgId,
-      }),
-    },
-  });
-
-  const { notifyAfterDomainEvent } = await import("@/features/notifications/notify-after");
-  await notifyAfterDomainEvent({
+  await emitDomainEvent({
     type: "commission.expected",
     entityType: "commission_entry",
     entityId: entry.id,

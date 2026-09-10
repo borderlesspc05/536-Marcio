@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useId, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { Paperclip } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import {
   evaluateProposalPriceAction,
@@ -17,7 +18,48 @@ type Props = {
 type ConditionDraft = {
   amount: string;
   paymentTerms: string;
+  fileName: string;
 };
+
+function AttachmentField({
+  index,
+  fileName,
+  onFileChange,
+}: {
+  index: number;
+  fileName: string;
+  onFileChange: (file: File | null) => void;
+}) {
+  const inputId = useId();
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <input
+        ref={inputRef}
+        id={inputId}
+        type="file"
+        name={`attachment_${index}`}
+        accept=".pdf,.jpg,.jpeg,.png,.webp"
+        className="sr-only"
+        onChange={(event) => onFileChange(event.target.files?.[0] ?? null)}
+      />
+      <Button
+        type="button"
+        variant="secondary"
+        size="sm"
+        className="gap-2"
+        onClick={() => inputRef.current?.click()}
+      >
+        <Paperclip className="h-4 w-4" aria-hidden />
+        Anexar arquivo
+      </Button>
+      <span className="text-xs text-neutral-500">
+        {fileName || "Nenhum arquivo selecionado (PDF ou imagem)"}
+      </span>
+    </div>
+  );
+}
 
 export function ProposalForm({ inviteId, canSubmit, blockMessage }: Props) {
   const router = useRouter();
@@ -26,8 +68,7 @@ export function ProposalForm({ inviteId, canSubmit, blockMessage }: Props) {
   const [message, setMessage] = useState<string | null>(null);
   const [priceHint, setPriceHint] = useState<string | null>(null);
   const [conditions, setConditions] = useState<ConditionDraft[]>([
-    { amount: "", paymentTerms: "" },
-    { amount: "", paymentTerms: "" },
+    { amount: "", paymentTerms: "", fileName: "" },
   ]);
 
   function updateCondition(index: number, patch: Partial<ConditionDraft>) {
@@ -89,7 +130,10 @@ export function ProposalForm({ inviteId, canSubmit, blockMessage }: Props) {
           variant="ghost"
           size="sm"
           onClick={() =>
-            setConditions((prev) => [...prev, { amount: "", paymentTerms: "" }])
+            setConditions((prev) => [
+              ...prev,
+              { amount: "", paymentTerms: "", fileName: "" },
+            ])
           }
         >
           + Condição
@@ -107,7 +151,7 @@ export function ProposalForm({ inviteId, canSubmit, blockMessage }: Props) {
             <div className="flex flex-wrap gap-2">
               <input
                 name={`amount_${index}`}
-                required
+                required={index === 0}
                 type="number"
                 min="0.01"
                 step="0.01"
@@ -126,19 +170,29 @@ export function ProposalForm({ inviteId, canSubmit, blockMessage }: Props) {
                 Avaliar preço
               </Button>
             </div>
-            <input
-              name={`paymentTerms_${index}`}
-              required
-              value={condition.paymentTerms}
-              onChange={(e) => updateCondition(index, { paymentTerms: e.target.value })}
-              placeholder="Condição de pagamento"
-              className="h-11 w-full rounded-xl border border-black/10 px-3 text-sm"
-            />
-            <input
-              type="file"
-              name={`attachment_${index}`}
-              accept=".pdf,.jpg,.jpeg,.png,.webp"
-              className="block w-full text-sm"
+            <div>
+              <label
+                htmlFor={`paymentTerms_${index}`}
+                className="mb-1 block text-xs font-medium text-neutral-600"
+              >
+                Condição de pagamento
+              </label>
+              <input
+                id={`paymentTerms_${index}`}
+                name={`paymentTerms_${index}`}
+                required={index === 0}
+                value={condition.paymentTerms}
+                onChange={(e) => updateCondition(index, { paymentTerms: e.target.value })}
+                placeholder="Ex.: à vista, 30 dias, 2x sem juros"
+                className="h-11 w-full rounded-xl border border-black/10 px-3 text-sm"
+              />
+            </div>
+            <AttachmentField
+              index={index}
+              fileName={condition.fileName}
+              onFileChange={(file) =>
+                updateCondition(index, { fileName: file?.name ?? "" })
+              }
             />
             {conditions.length > 1 ? (
               <button

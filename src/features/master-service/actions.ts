@@ -10,7 +10,12 @@ import {
 import { requireAuthorizedSession } from "@/lib/auth/guards";
 import { firestoreDb } from "@/lib/firebase/firestore-db";
 import { emitDomainEvent } from "@/lib/domain-events";
-import { buildRifComparative, generateAiRifInsights } from "./rif";
+import { toPublicErrorMessage } from "@/lib/errors";
+import { buildRifComparative, buildRifExecutiveDocument, RIF_MIN_PROPOSALS, generateAiRifInsights } from "./rif";
+import { resolveRifBrand } from "./rif-brand";
+import type { ActionResult } from "./action-result";
+
+export type { ActionResult } from "./action-result";
 
 function slugify(value: string) {
   return value
@@ -209,107 +214,118 @@ export async function setServicePipelineStatusAction(formData: FormData) {
   revalidatePath("/app");
 }
 
-export async function masterAcceptProposalAction(formData: FormData) {
-  const session = await requireMasterService();
-  const quotationId = String(formData.get("quotationId") || "").trim();
-  const proposalId = String(formData.get("proposalId") || "").trim();
+export async function masterAcceptProposalAction(formData: FormData): Promise<ActionResult> {
+  try {
+    const session = await requireMasterService();
+    const quotationId = String(formData.get("quotationId") || "").trim();
+    const proposalId = String(formData.get("proposalId") || "").trim();
 
-  const quotation = await firestoreDb.quotation.findFirst({
-    where: { id: quotationId, serviceManagedByOrgId: session.organizationId },
-    include: { serviceClient: true },
-  });
-  if (!quotation) throw new Error("Cotação não encontrada.");
-
-  const proposal = await firestoreDb.proposal.findFirst({
-    where: { id: proposalId, quotationId },
-  });
-  if (!proposal) throw new Error("Proposta inválida.");
-
-  await firestoreDb.quotation.update({
-    where: { id: quotationId },
-    data: {
-      approvedProposalId: proposalId,
-      masterAcceptedAt: new Date(),
-      servicePipelineStatus: ServicePipelineStatus.em_analise,
-      rifVisibleToClient: true,
-      status: "em_negociacao",
-    },
-  });
-
-  if (quotation.requesterEmail) {
-    await firestoreDb.emailOutbox.create({
-      data: {
-        toEmail: quotation.requesterEmail,
-        subject: `Proposta pronta para revisão — ${quotation.publicId}`,
-        bodyText: `Olá${quotation.requesterName ? `, ${quotation.requesterName}` : ""}. A equipe Cota Service liberou a proposta da cotação ${quotation.publicId} para sua análise. Acesse o painel de acompanhamento.`,
-        template: "service_master_accept",
-        metadataJson: JSON.stringify({ quotationId, proposalId }),
-      },
+    const quotation = await firestoreDb.quotation.findFirst({
+      where: { id: quotationId, serviceManagedByOrgId: session.organizationId },
+      include: { serviceClient: true },
     });
-  }
+    if (!quotation) return { ok: false, message: "Cotação não encontrada." };
 
-  await emitDomainEvent({
-    type: "service_quotation.master_accepted",
-    entityType: "Quotation",
-    entityId: quotationId,
-    organizationId: session.organizationId,
-    payload: { proposalId },
-  });
-
-  revalidatePath(`/app/service/cotacoes/${quotationId}`);
-  revalidatePath("/app/service/cotacoes");
-}
-
-export async function solicitanteConfirmAcceptAction(formData: FormData) {
-  const session = await requireMasterService();
-  const quotationId = String(formData.get("quotationId") || "").trim();
-
-  const quotation = await firestoreDb.quotation.findFirst({
-    where: { id: quotationId, serviceManagedByOrgId: session.organizationId },
-  });
-  if (!quotation?.approvedProposalId || !quotation.masterAcceptedAt) {
-    throw new Error("Aceite do Master pendente.");
-  }
-
-  await firestoreDb.$transaction(async (tx) => {
-    await tx.proposal.update({
-      where: { id: quotation.approvedProposalId! },
-      data: { status: "aprovada" },
+    const proposal = await firestoreDb.proposal.findFirst({
+      where: { id: proposalId, quotationId },
     });
-    await tx.proposal.updateMany({
-      where: {
-        quotationId,
-        id: { not: quotation.approvedProposalId! },
-      },
-      data: { status: "recusada" },
-    });
-    const approvedInvite = await tx.quotationInvite.findFirst({
-      where: { proposal: { id: quotation.approvedProposalId! } },
-      select: { id: true },
-    });
-    if (approvedInvite) {
-      await tx.quotationInvite.update({
-        where: { id: approvedInvite.id },
-        data: { supplierPipelineStage: SupplierPipelineStage.ganha },
-      });
-      await tx.quotationInvite.updateMany({
-        where: { quotationId, id: { not: approvedInvite.id } },
-        data: { supplierPipelineStage: SupplierPipelineStage.perdida },
-      });
-    }
-    await tx.quotation.update({
+    if (!proposal) return { ok: false, message: "Proposta inválida." };
+
+    await firestoreDb.quotation.update({
       where: { id: quotationId },
       data: {
-        status: "aprovada",
-        servicePipelineStatus: ServicePipelineStatus.aprovada,
-        solicitanteAcceptedAt: new Date(),
-        contactReleasedAt: new Date(),
+        approvedProposalId: proposalId,
+        masterAcceptedAt: new Date(),
+        servicePipelineStatus: ServicePipelineStatus.em_analise,
+        rifVisibleToClient: true,
+        status: "em_negociacao",
       },
     });
-  });
 
-  revalidatePath(`/app/service/cotacoes/${quotationId}`);
-  revalidatePath("/app/service/cotacoes");
+    if (quotation.requesterEmail) {
+      await firestoreDb.emailOutbox.create({
+        data: {
+          toEmail: quotation.requesterEmail,
+          subject: `Proposta pronta para revisão — ${quotation.publicId}`,
+          bodyText: `Olá${quotation.requesterName ? `, ${quotation.requesterName}` : ""}. A equipe Cota Service liberou a proposta da cotação ${quotation.publicId} para sua análise. Acesse o painel de acompanhamento.`,
+          template: "service_master_accept",
+          metadataJson: JSON.stringify({ quotationId, proposalId }),
+        },
+      });
+    }
+
+    await emitDomainEvent({
+      type: "service_quotation.master_accepted",
+      entityType: "Quotation",
+      entityId: quotationId,
+      organizationId: session.organizationId,
+      payload: { proposalId },
+    });
+
+    revalidatePath(`/app/service/cotacoes/${quotationId}`);
+    revalidatePath("/app/service/cotacoes");
+    revalidatePath("/app");
+    return { ok: true, message: "Aceite Master registrado. Proposta indicada para o solicitante." };
+  } catch (error) {
+    return { ok: false, message: toPublicErrorMessage(error) };
+  }
+}
+
+export async function solicitanteConfirmAcceptAction(formData: FormData): Promise<ActionResult> {
+  try {
+    const session = await requireMasterService();
+    const quotationId = String(formData.get("quotationId") || "").trim();
+
+    const quotation = await firestoreDb.quotation.findFirst({
+      where: { id: quotationId, serviceManagedByOrgId: session.organizationId },
+    });
+    if (!quotation?.approvedProposalId || !quotation.masterAcceptedAt) {
+      return { ok: false, message: "Aceite do Master pendente." };
+    }
+
+    await firestoreDb.$transaction(async (tx) => {
+      await tx.proposal.update({
+        where: { id: quotation.approvedProposalId! },
+        data: { status: "aprovada" },
+      });
+      await tx.proposal.updateMany({
+        where: {
+          quotationId,
+          id: { not: quotation.approvedProposalId! },
+        },
+        data: { status: "recusada" },
+      });
+      const approvedInvite = await tx.quotationInvite.findFirst({
+        where: { proposal: { id: quotation.approvedProposalId! } },
+        select: { id: true },
+      });
+      if (approvedInvite) {
+        await tx.quotationInvite.update({
+          where: { id: approvedInvite.id },
+          data: { supplierPipelineStage: SupplierPipelineStage.ganha },
+        });
+        await tx.quotationInvite.updateMany({
+          where: { quotationId, id: { not: approvedInvite.id } },
+          data: { supplierPipelineStage: SupplierPipelineStage.perdida },
+        });
+      }
+      await tx.quotation.update({
+        where: { id: quotationId },
+        data: {
+          status: "aprovada",
+          servicePipelineStatus: ServicePipelineStatus.aprovada,
+          solicitanteAcceptedAt: new Date(),
+          contactReleasedAt: new Date(),
+        },
+      });
+    });
+
+    revalidatePath(`/app/service/cotacoes/${quotationId}`);
+    revalidatePath("/app/service/cotacoes");
+    return { ok: true, message: "Aceite do solicitante confirmado. Contato liberado." };
+  } catch (error) {
+    return { ok: false, message: toPublicErrorMessage(error) };
+  }
 }
 
 export async function markServiceExternalApprovalAction(formData: FormData) {
@@ -363,72 +379,150 @@ export async function markServiceRejectedAction(formData: FormData) {
   revalidatePath("/app/service/cotacoes");
 }
 
-export async function generateRifAction(formData: FormData) {
-  const session = await requireMasterService();
-  const quotationId = String(formData.get("quotationId") || "").trim();
-  const publish = formData.get("publish") === "on";
+export async function generateRifAction(formData: FormData): Promise<ActionResult> {
+  try {
+    const session = await requireMasterService();
+    const quotationId = String(formData.get("quotationId") || "").trim();
+    const publish = formData.get("publish") === "on";
 
-  const quotation = await firestoreDb.quotation.findFirst({
-    where: { id: quotationId, serviceManagedByOrgId: session.organizationId },
-    include: {
-      proposals: {
-        include: {
-          organization: true,
-          conditions: { orderBy: { sortOrder: "asc" } },
+    const quotation = await firestoreDb.quotation.findFirst({
+      where: { id: quotationId, serviceManagedByOrgId: session.organizationId },
+      include: {
+        condominium: true,
+        category: true,
+        serviceItem: true,
+        organization: true,
+        proposals: {
+          include: {
+            organization: true,
+            conditions: {
+              orderBy: { sortOrder: "asc" },
+              include: { attachments: true },
+            },
+          },
         },
+        serviceClient: true,
       },
-      serviceClient: true,
-    },
-  });
-  if (!quotation) throw new Error("Cotação não encontrada.");
-
-  const comparative = buildRifComparative(quotation.proposals);
-  const aiMode = quotation.serviceClient?.aiApiMode === "client" ? "client" : "platform";
-  const aiInsights = await generateAiRifInsights({
-    mode: aiMode,
-    comparativeMarkdown: comparative.markdown,
-  });
-
-  await firestoreDb.rifAnalysis.create({
-    data: {
-      quotationId,
-      generatedByUserId: session.userId,
-      status: publish ? "published" : "draft",
-      averageCents: comparative.averageCents,
-      summaryMarkdown: comparative.markdown,
-      comparativeJson: JSON.stringify(comparative.rows),
-      aiInsights,
-    },
-  });
-
-  if (publish) {
-    await firestoreDb.quotation.update({
-      where: { id: quotationId },
-      data: { rifVisibleToClient: true },
     });
-  }
+    if (!quotation) return { ok: false, message: "Cotação não encontrada." };
 
-  revalidatePath(`/app/service/cotacoes/${quotationId}`);
+    const proposalCount = quotation.proposals.length;
+    if (proposalCount < RIF_MIN_PROPOSALS) {
+      return {
+        ok: false,
+        message: `A Análise RIF só pode ser gerada com pelo menos ${RIF_MIN_PROPOSALS} propostas (agora: ${proposalCount}). Evita uso desnecessário de token.`,
+      };
+    }
+
+    const comparative = buildRifComparative(
+      quotation.proposals.map((proposal) => ({
+        id: proposal.id,
+        organization: proposal.organization,
+        conditions: proposal.conditions,
+        attachments: proposal.conditions.flatMap((condition) =>
+          condition.attachments.map((item) => ({ fileName: item.fileName })),
+        ),
+      })),
+    );
+
+    const brand = await resolveRifBrand({
+      organizationId: quotation.organizationId,
+      serviceClient: quotation.serviceClient,
+      organizationName: quotation.organization.name,
+    });
+
+    const document = buildRifExecutiveDocument({
+      context: {
+        publicId: quotation.publicId,
+        condominiumName: quotation.condominium.name,
+        categoryName: quotation.category.name,
+        serviceName: quotation.serviceItem.name,
+        description: quotation.description,
+        requesterOrgName: quotation.organization.name,
+      },
+      averageCents: comparative.averageCents,
+      rows: comparative.rows,
+      brand,
+    });
+
+    const aiMode = quotation.serviceClient?.aiApiMode === "client" ? "client" : "platform";
+    const aiInsights = await generateAiRifInsights({
+      mode: aiMode,
+      comparativeMarkdown: document.markdown,
+    });
+
+    await firestoreDb.rifAnalysis.create({
+      data: {
+        quotationId,
+        generatedByUserId: session.userId,
+        status: publish ? "published" : "draft",
+        averageCents: comparative.averageCents,
+        summaryMarkdown: document.markdown,
+        comparativeJson: JSON.stringify({
+          rows: comparative.rows,
+          plainForWord: document.plainForWord,
+          brand,
+          context: {
+            publicId: quotation.publicId,
+            condominiumName: quotation.condominium.name,
+            categoryName: quotation.category.name,
+            serviceName: quotation.serviceItem.name,
+            description: quotation.description,
+            requesterOrgName: quotation.organization.name,
+          },
+        }),
+        aiInsights,
+      },
+    });
+
+    if (publish) {
+      await firestoreDb.quotation.update({
+        where: { id: quotationId },
+        data: { rifVisibleToClient: true },
+      });
+    }
+
+    revalidatePath(`/app/service/cotacoes/${quotationId}`);
+    return {
+      ok: true,
+      message: publish
+        ? "RIF gerado e publicado para o solicitante."
+        : "RIF gerado como rascunho (não visível ao solicitante).",
+    };
+  } catch (error) {
+    return { ok: false, message: toPublicErrorMessage(error) };
+  }
 }
 
-export async function dispatchServiceQuotationAction(formData: FormData) {
-  const session = await requireMasterService();
-  const quotationId = String(formData.get("quotationId") || "").trim();
+export async function dispatchServiceQuotationAction(formData: FormData): Promise<ActionResult> {
+  try {
+    const session = await requireMasterService();
+    const quotationId = String(formData.get("quotationId") || "").trim();
 
-  const quotation = await firestoreDb.quotation.findFirst({
-    where: { id: quotationId, serviceManagedByOrgId: session.organizationId },
-  });
-  if (!quotation) throw new Error("Cotação não encontrada.");
+    const quotation = await firestoreDb.quotation.findFirst({
+      where: { id: quotationId, serviceManagedByOrgId: session.organizationId },
+    });
+    if (!quotation) return { ok: false, message: "Cotação não encontrada." };
 
-  await firestoreDb.quotation.update({
-    where: { id: quotationId },
-    data: {
-      invitesPaused: false,
-      servicePipelineStatus: ServicePipelineStatus.em_andamento,
-      status: "aberta",
-    },
-  });
+    await firestoreDb.quotation.update({
+      where: { id: quotationId },
+      data: {
+        invitesPaused: false,
+        servicePipelineStatus: ServicePipelineStatus.em_andamento,
+        status: "aberta",
+      },
+    });
 
-  revalidatePath(`/app/service/cotacoes/${quotationId}`);
-  revalidatePath("/app/service/cotacoes");
+    const { runDistributionEngine } = await import("@/features/distribution/engine");
+    const distribution = await runDistributionEngine(quotationId);
+
+    revalidatePath(`/app/service/cotacoes/${quotationId}`);
+    revalidatePath("/app/service/cotacoes");
+    return {
+      ok: true,
+      message: `Disparado: ${distribution.invited.length} convite(s) / pipeline Em Andamento.`,
+    };
+  } catch (error) {
+    return { ok: false, message: toPublicErrorMessage(error) };
+  }
 }

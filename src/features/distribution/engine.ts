@@ -1,6 +1,7 @@
 import { firestoreDb } from "@/lib/firebase/firestore-db";
 import { currentYearMonth } from "@/features/quotations/franchise";
 import { writeAuditLog } from "@/lib/audit";
+import { emitDomainEvent } from "@/lib/domain-events";
 
 export const DISTRIBUTION_TIERS = {
   favorite: 1,
@@ -229,16 +230,14 @@ export async function runDistributionEngine(quotationId: string): Promise<Distri
     }
   }
 
-  await firestoreDb.domainEvent.create({
-    data: {
-      type: "distribution.completed",
-      entityType: "quotation",
-      entityId: quotation.id,
-      organizationId: quotation.organizationId,
-      payload: JSON.stringify({
-        invited: result.invited.length,
-        skipped: result.skipped.length,
-      }),
+  await emitDomainEvent({
+    type: "distribution.completed",
+    entityType: "quotation",
+    entityId: quotation.id,
+    organizationId: quotation.organizationId,
+    payload: {
+      invited: result.invited.length,
+      skipped: result.skipped.length,
     },
   });
 
@@ -255,16 +254,14 @@ export async function pauseQuotationInvitesIfMaxReached(quotationId: string): Pr
     data: { invitesPaused: true },
   });
 
-  await firestoreDb.domainEvent.create({
-    data: {
-      type: "quotation.max_proposals_reached",
-      entityType: "quotation",
-      entityId: quotationId,
-      organizationId: quotation.organizationId,
-      payload: JSON.stringify({
-        proposalsCount: quotation.proposalsCount,
-        maxProposals: quotation.maxProposals,
-      }),
+  await emitDomainEvent({
+    type: "quotation.max_proposals_reached",
+    entityType: "quotation",
+    entityId: quotationId,
+    organizationId: quotation.organizationId,
+    payload: {
+      proposalsCount: quotation.proposalsCount,
+      maxProposals: quotation.maxProposals,
     },
   });
 
@@ -281,23 +278,7 @@ export async function emitMinProposalsIfReached(quotationId: string): Promise<bo
   });
   if (already) return false;
 
-  await firestoreDb.domainEvent.create({
-    data: {
-      type: "quotation.min_proposals_reached",
-      entityType: "quotation",
-      entityId: quotationId,
-      organizationId: quotation.organizationId,
-      payload: JSON.stringify({
-        proposalsCount: quotation.proposalsCount,
-        minProposals: quotation.minProposals,
-        quotationId,
-        code: quotation.publicId,
-      }),
-    },
-  });
-
-  const { notifyAfterDomainEvent } = await import("@/features/notifications/notify-after");
-  await notifyAfterDomainEvent({
+  await emitDomainEvent({
     type: "quotation.min_proposals_reached",
     entityType: "quotation",
     entityId: quotationId,

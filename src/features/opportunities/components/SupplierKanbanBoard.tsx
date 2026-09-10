@@ -154,15 +154,13 @@ export function SupplierKanbanBoard({ initialCards }: SupplierKanbanBoardProps) 
                   <div>
                     <h2 className="text-sm font-bold text-neutral-900">{meta.label}</h2>
                     <p className="mt-0.5 text-[11px] text-neutral-500">{meta.description}</p>
-                    {stageTotalCents > 0 ? (
-                      <p className="mt-1 text-[11px] font-semibold text-[#087F8C]">
-                        Total etapa:{" "}
-                        {(stageTotalCents / 100).toLocaleString("pt-BR", {
-                          style: "currency",
-                          currency: "BRL",
-                        })}
-                      </p>
-                    ) : null}
+                    <p className="mt-1 text-[11px] font-semibold text-[#00aab3]">
+                      Total etapa:{" "}
+                      {(stageTotalCents / 100).toLocaleString("pt-BR", {
+                        style: "currency",
+                        currency: "BRL",
+                      })}
+                    </p>
                   </div>
                 </div>
                 <span className="rounded-lg bg-white/80 px-2 py-1 text-xs font-bold text-neutral-600 shadow-sm">

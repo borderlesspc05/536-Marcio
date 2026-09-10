@@ -39,7 +39,7 @@ export function PlansSection({ id = "planos", title, subtitle, plans, audience }
     <section id={id} className="py-20 lg:py-24">
       <Container>
         <div className="mx-auto max-w-3xl text-center">
-          <p className="text-sm font-semibold uppercase tracking-wide text-[#A7115F]">Planos</p>
+          <p className="text-sm font-semibold uppercase tracking-wide text-[#c10089]">Planos</p>
           <h2 className="mt-3 text-3xl font-extrabold tracking-tight text-[#0A0A0A] sm:text-4xl">
             {title}
           </h2>
@@ -59,12 +59,12 @@ export function PlansSection({ id = "planos", title, subtitle, plans, audience }
                 key={plan.slug}
                 className={`group relative flex flex-col rounded-2xl border p-6 transition-[transform,box-shadow,border-color] duration-300 hover:-translate-y-1 sm:p-7 ${
                   plan.recommended
-                    ? "border-[#A7115F]/35 bg-gradient-to-br from-white via-white to-[#FFF1F7] shadow-[0_20px_50px_-24px_rgba(167,17,95,0.38)]"
-                    : "border-[#D9E2EC] bg-white/90 shadow-[0_16px_40px_-32px_rgba(16,42,67,0.7)] hover:border-[#A7115F]/20"
+                    ? "border-[#c10089]/35 bg-gradient-to-br from-white via-white to-[#FFF1F7] shadow-[0_20px_50px_-24px_rgba(193, 0, 137,0.38)]"
+                    : "border-[#D9E2EC] bg-white/90 shadow-[0_16px_40px_-32px_rgba(16,42,67,0.7)] hover:border-[#c10089]/20"
                 }`}
               >
                 {plan.recommended ? (
-                  <span className="absolute -top-3 left-6 rounded-full bg-[#A7115F] px-3 py-1 text-[11px] font-semibold text-white">
+                  <span className="absolute -top-3 left-6 rounded-full bg-[#c10089] px-3 py-1 text-[11px] font-semibold text-white">
                     Recomendado
                   </span>
                 ) : null}
@@ -96,7 +96,7 @@ export function PlansSection({ id = "planos", title, subtitle, plans, audience }
                     {plan.quotaLabel ?? "Negócio sob relacionamento"}
                   </p>
                 )}
-                <p className="mt-5 rounded-xl bg-[#FFF1F7] px-3 py-2 text-center text-xs font-bold text-[#8F0E52]">
+                <p className="mt-5 rounded-xl bg-[#FFF1F7] px-3 py-2 text-center text-xs font-bold text-[#9a006e]">
                   Sua indicação vale cashback
                 </p>
                 <ul className="mt-6 flex-1 space-y-2.5">

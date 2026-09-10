@@ -13,6 +13,7 @@ import {
   negotiationMessageSchema,
   updateProposalConditionsSchema,
 } from "@/features/negotiation/schemas";
+import { emitDomainEvent } from "@/lib/domain-events";
 
 export type ActionResult = { ok: boolean; message?: string };
 
@@ -70,29 +71,15 @@ export async function startNegotiationAction(formData: FormData): Promise<Action
           },
         });
       }
-      await tx.domainEvent.create({
-        data: {
-          type: "negotiation.started",
-          entityType: "quotation",
-          entityId: quotationId,
-          organizationId: session.organizationId,
-          payload: JSON.stringify({
-            proposalIds: proposals.map((item) => item.id),
-            quotationId,
-            solicitanteOrgId: session.organizationId,
-            supplierOrgId: proposals[0]?.organizationId,
-          }),
-        },
-      });
     });
 
-    const { notifyAfterDomainEvent } = await import("@/features/notifications/notify-after");
-    await notifyAfterDomainEvent({
+    await emitDomainEvent({
       type: "negotiation.started",
       entityType: "quotation",
       entityId: quotationId,
       organizationId: session.organizationId,
       payload: {
+        proposalIds: proposals.map((item) => item.id),
         quotationId,
         solicitanteOrgId: session.organizationId,
         supplierOrgId: proposals[0]?.organizationId,
@@ -161,12 +148,16 @@ export async function sendNegotiationMessageAction(formData: FormData): Promise<
       },
     });
 
-    await firestoreDb.domainEvent.create({
-      data: {
-        type: "negotiation.message",
-        entityType: "proposal",
-        entityId: proposal.id,
-        organizationId: session.organizationId,
+    await emitDomainEvent({
+      type: "negotiation.message",
+      entityType: "proposal",
+      entityId: proposal.id,
+      organizationId: session.organizationId,
+      payload: {
+        quotationId: proposal.quotationId,
+        solicitanteOrgId: proposal.quotation.organizationId,
+        supplierOrgId: proposal.organizationId,
+        preview: parsed.data.body.slice(0, 120),
       },
     });
 
@@ -240,27 +231,9 @@ export async function approveConditionAction(formData: FormData): Promise<Action
           approvedConditionId: condition.id,
         },
       });
-      await tx.domainEvent.create({
-        data: {
-          type: "quotation.approved",
-          entityType: "quotation",
-          entityId: proposal.quotationId,
-          organizationId: session.organizationId,
-          payload: JSON.stringify({
-            proposalId: proposal.id,
-            conditionId: condition.id,
-            amountCents: condition.amountCents,
-            supplierOrgId: proposal.organizationId,
-            quotationId: proposal.quotationId,
-            commissionHook: "recordCommissionFromApproval",
-            remindersClosed: true,
-          }),
-        },
-      });
     });
 
-    const { notifyAfterDomainEvent } = await import("@/features/notifications/notify-after");
-    await notifyAfterDomainEvent({
+    await emitDomainEvent({
       type: "quotation.approved",
       entityType: "quotation",
       entityId: proposal.quotationId,
@@ -271,6 +244,8 @@ export async function approveConditionAction(formData: FormData): Promise<Action
         amountCents: condition.amountCents,
         supplierOrgId: proposal.organizationId,
         quotationId: proposal.quotationId,
+        commissionHook: "recordCommissionFromApproval",
+        remindersClosed: true,
       },
     });
 
@@ -352,34 +327,19 @@ export async function approveOthersAction(formData: FormData): Promise<ActionRes
           otherFinalAmountCents: amountCents,
         },
       });
-      await tx.domainEvent.create({
-        data: {
-          type: "quotation.finalized_others",
-          entityType: "quotation",
-          entityId: quotation.id,
-          organizationId: session.organizationId,
-          payload: JSON.stringify({
-            companyName: parsed.data.companyName,
-            amountCents,
-            providerName: parsed.data.companyName,
-            quotationId: quotation.id,
-            remindersClosed: true,
-          }),
-        },
-      });
     });
 
-    const { notifyAfterDomainEvent } = await import("@/features/notifications/notify-after");
-    await notifyAfterDomainEvent({
+    await emitDomainEvent({
       type: "quotation.finalized_others",
       entityType: "quotation",
       entityId: quotation.id,
       organizationId: session.organizationId,
       payload: {
         companyName: parsed.data.companyName,
+        amountCents,
         providerName: parsed.data.companyName,
         quotationId: quotation.id,
-        amountCents,
+        remindersClosed: true,
       },
     });
 
@@ -454,14 +414,13 @@ export async function updateProposalDuringNegotiationAction(
           },
         });
       }
-      await tx.domainEvent.create({
-        data: {
-          type: "negotiation.counter_offer",
-          entityType: "proposal",
-          entityId: proposal.id,
-          organizationId: session.organizationId,
-        },
-      });
+    });
+
+    await emitDomainEvent({
+      type: "negotiation.counter_offer",
+      entityType: "proposal",
+      entityId: proposal.id,
+      organizationId: session.organizationId,
     });
 
     revalidatePath(`/app/cotacoes/${proposal.quotationId}`);
@@ -485,7 +444,6 @@ export async function reinforceInviteAction(formData: FormData): Promise<ActionR
       },
       include: {
         quotation: true,
-        supplier: { include: { members: { include: { user: true } } } },
       },
     });
     if (!invite) return { ok: false, message: "Convite não encontrado." };
@@ -493,37 +451,15 @@ export async function reinforceInviteAction(formData: FormData): Promise<ActionR
       return { ok: false, message: "Convite encerrado." };
     }
 
-    const { notifyOrgMembers } = await import("@/features/notifications/service");
-    const { sendTemplatedEmail } = await import("@/features/notifications/email-provider");
-
-    await notifyOrgMembers(invite.supplierOrgId, {
+    await emitDomainEvent({
       type: "invite.reinforced",
-      title: "Pedido reforçado pelo solicitante",
-      body: `A cotação ${invite.quotation.publicId} aguarda sua proposta. Por favor, responda em breve.`,
-      href: `/app/oportunidades?inviteId=${invite.id}`,
-      metadata: { inviteId: invite.id, quotationId: invite.quotationId },
-    });
-
-    for (const member of invite.supplier.members) {
-      await sendTemplatedEmail({
-        toEmail: member.user.email,
-        subject: `CotaCondo — reforço de pedido (${invite.quotation.publicId})`,
-        bodyText: `Olá ${member.user.name},\n\nO solicitante reforçou o pedido da cotação ${invite.quotation.publicId}. Envie a proposta ou decline a oportunidade.\n`,
-        template: "quotation_invite",
-        metadata: { inviteId: invite.id },
-      });
-    }
-
-    await firestoreDb.domainEvent.create({
-      data: {
-        type: "invite.reinforced",
-        entityType: "quotation_invite",
-        entityId: invite.id,
-        organizationId: session.organizationId,
-        payload: JSON.stringify({
-          supplierOrgId: invite.supplierOrgId,
-          quotationId: invite.quotationId,
-        }),
+      entityType: "quotation_invite",
+      entityId: invite.id,
+      organizationId: session.organizationId,
+      payload: {
+        supplierOrgId: invite.supplierOrgId,
+        quotationId: invite.quotationId,
+        publicId: invite.quotation.publicId,
       },
     });
 

@@ -11,12 +11,14 @@ import {
   hashPassword,
 } from "@/lib/auth/password";
 import {
-  buildSessionForUser,
   clearSessionCookie,
-  createSessionToken,
-  setSessionCookie,
   type SessionPayload,
 } from "@/lib/auth/session";
+import {
+  assertAuthStackReady,
+  issueSession,
+  issueSessionForUser,
+} from "@/lib/auth/establish-session";
 import { verifyPassword } from "@/lib/auth/password";
 import {
   firebaseSendPasswordResetEmail,
@@ -214,10 +216,8 @@ export async function confirmEmailAction(formData: FormData): Promise<ActionResu
       entityId: user.id,
     });
 
-    const sessionPayload = await buildSessionForUser(user.id);
+    const sessionPayload = await issueSessionForUser(user.id);
     if (sessionPayload) {
-      const jwt = await createSessionToken(sessionPayload);
-      await setSessionCookie(jwt);
       redirect("/app");
     }
 
@@ -287,17 +287,10 @@ async function tryLocalExternalApproverLogin(
 
 export async function loginAction(formData: FormData): Promise<ActionResult> {
   try {
-    if (!isFirebaseAuthConfigured()) {
-      return { ok: false, message: "Firebase Auth não configurado no ambiente." };
-    }
-
-    const { isFirebaseAdminConfigured } = await import("@/lib/firebase/admin");
-    if (!isFirebaseAdminConfigured()) {
-      return {
-        ok: false,
-        message:
-          "Firebase Admin ausente. No Firebase Console (projeto marcio-ab7d9) → Project settings → Service accounts → Generate new private key, e cole o JSON em FIREBASE_SERVICE_ACCOUNT_JSON no .env.local (uma linha).",
-      };
+    try {
+      await assertAuthStackReady();
+    } catch (error) {
+      return { ok: false, message: toPublicErrorMessage(error) };
     }
 
     const parsed = loginSchema.safeParse({
@@ -318,8 +311,7 @@ export async function loginAction(formData: FormData): Promise<ActionResult> {
     } catch (error) {
       const localSession = await tryLocalExternalApproverLogin(email, parsed.data.password);
       if (localSession) {
-        const jwt = await createSessionToken(localSession);
-        await setSessionCookie(jwt);
+        await issueSession(localSession);
         await writeAuditLog({
           userId: localSession.userId,
           action: "auth.login_success",
@@ -363,13 +355,10 @@ export async function loginAction(formData: FormData): Promise<ActionResult> {
       };
     }
 
-    const sessionPayload = await buildSessionForUser(user.id);
+    const sessionPayload = await issueSessionForUser(user.id);
     if (!sessionPayload) {
       throw new AppError("Conta sem organização vinculada.", "NO_ORG", 400);
     }
-
-    const jwt = await createSessionToken(sessionPayload);
-    await setSessionCookie(jwt);
 
     await writeAuditLog({
       userId: user.id,

@@ -13,6 +13,8 @@ export async function requireAuthorizedSession(options?: {
   types?: OrganizationType[];
   roles?: MemberRole[];
   href?: string;
+  /** Quando true, menu/href também valida features de plano. */
+  checkFeatures?: boolean;
 }): Promise<SessionPayload> {
   const session = await getSession();
   if (!session) {
@@ -21,7 +23,10 @@ export async function requireAuthorizedSession(options?: {
 
   const home = defaultAppHome(session);
 
-  if (options?.href && !canAccessHref(options.href, session, { checkFeatures: false })) {
+  if (
+    options?.href &&
+    !canAccessHref(options.href, session, { checkFeatures: options.checkFeatures === true })
+  ) {
     redirect(home);
   }
 
@@ -35,3 +40,5 @@ export async function requireAuthorizedSession(options?: {
 
   return session;
 }
+
+export { requireCapability, requirePlanFeature } from "@/lib/auth/capability";

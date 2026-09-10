@@ -3,10 +3,7 @@
 import { MemberRole } from "@/lib/domain/types";
 import { firestoreDb } from "@/lib/firebase/firestore-db";
 import { toPublicErrorMessage } from "@/lib/errors";
-import {
-  createSessionToken,
-  setSessionCookie,
-} from "@/lib/auth/session";
+import { issueSession } from "@/lib/auth/establish-session";
 import { verifyPassword } from "@/lib/auth/password";
 import { getServiceClientBySlug } from "@/features/external-approver/data";
 
@@ -67,7 +64,7 @@ export async function serviceClientLoginAction(formData: FormData): Promise<Acti
       });
     }
 
-    const token = await createSessionToken({
+    await issueSession({
       userId: user.id,
       email: user.email,
       name: user.name,
@@ -76,7 +73,6 @@ export async function serviceClientLoginAction(formData: FormData): Promise<Acti
       organizationName: membership.organization.name,
       role: membership.role,
     });
-    await setSessionCookie(token);
     return { ok: true };
   } catch (error) {
     return { ok: false, message: toPublicErrorMessage(error) };
