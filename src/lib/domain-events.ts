@@ -11,9 +11,6 @@ export type DomainEventInput = {
   payload?: Record<string, unknown>;
 };
 
-/** @deprecated use DomainEventInput */
-type EmitInput = DomainEventInput;
-
 type DbLike = {
   domainEvent: {
     create: (args: { data: Record<string, unknown> }) => Promise<{

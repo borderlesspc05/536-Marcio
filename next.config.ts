@@ -10,8 +10,6 @@ const nextConfig: NextConfig = {
     serverActions: {
       bodySizeLimit: "4mb",
     },
-    // Next 15.5+: proxy interno também limita o body (evita truncar upload)
-    proxyClientMaxBodySize: "4mb",
   },
 };
 

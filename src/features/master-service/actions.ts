@@ -77,7 +77,7 @@ export async function createServiceClientAction(formData: FormData) {
   });
   if (existing) throw new Error("Este cliente já está no Cota Service.");
 
-  let slug = slugify(customSlug || displayName) || `cliente-${Date.now()}`;
+  const slug = slugify(customSlug || displayName) || `cliente-${Date.now()}`;
   await assertUniqueSlug(slug);
 
   const cotaServicePlan = await firestoreDb.plan.findUnique({
