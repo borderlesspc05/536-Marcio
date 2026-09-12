@@ -25,6 +25,7 @@ export function ExternalApprovalModal({
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
   const [notApplicable, setNotApplicable] = useState(false);
 
   const isApprove = mode === "approve";
@@ -37,11 +38,16 @@ export function ExternalApprovalModal({
         variant={triggerVariant === "secondary" ? "secondary" : undefined}
         onClick={() => {
           setError(null);
+          setSuccess(null);
           setOpen(true);
         }}
       >
         {label}
       </Button>
+
+      {success ? (
+        <p className="mt-2 rounded-xl bg-emerald-50 px-3 py-2 text-sm text-emerald-800">{success}</p>
+      ) : null}
 
       {open ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
@@ -68,6 +74,9 @@ export function ExternalApprovalModal({
                     return;
                   }
                   setOpen(false);
+                  setSuccess(result.message ?? "Salvo com sucesso.");
+                  const tab = isApprove ? "aprovadas" : "recusadas";
+                  router.push(`/app/aprovador/cotacoes?tab=${tab}`);
                   router.refresh();
                 });
               }}

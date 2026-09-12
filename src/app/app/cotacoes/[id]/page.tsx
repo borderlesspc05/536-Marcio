@@ -3,14 +3,12 @@ import { notFound } from "next/navigation";
 import { requireAuthorizedSession } from "@/lib/auth/guards";
 import { firestoreDb } from "@/lib/firebase/firestore-db";
 import { QuotationComparePanel } from "@/features/negotiation/components/QuotationComparePanel";
+import {
+  QuotationActivityTimeline,
+  buildQuotationActivityTimeline,
+} from "@/features/negotiation/components/QuotationActivityTimeline";
 
 type PageProps = { params: Promise<{ id: string }> };
-
-const TIMELINE = [
-  { key: "aberta", label: "Aberta" },
-  { key: "em_negociacao", label: "Em negociação" },
-  { key: "aprovada", label: "Aprovada / Outros / Encerrada" },
-] as const;
 
 export default async function CotacaoDetalhePage({ params }: PageProps) {
   const session = await requireAuthorizedSession({ href: "/app/cotacoes" });
@@ -23,6 +21,11 @@ export default async function CotacaoDetalhePage({ params }: PageProps) {
       category: true,
       serviceItem: true,
       attachments: true,
+      rifAnalyses: {
+        where: { status: "published" },
+        orderBy: { createdAt: "desc" },
+        take: 1,
+      },
       invites: {
         include: {
           supplier: {
@@ -62,6 +65,12 @@ export default async function CotacaoDetalhePage({ params }: PageProps) {
   });
   if (!quotation) notFound();
 
+  const publishedRif = quotation.rifAnalyses[0] ?? null;
+  const canDownloadRif = Boolean(
+    publishedRif && quotation.rifVisibleToClient && publishedRif.status === "published",
+  );
+  const canDownloadProposals = quotation.proposals.length > 0;
+
   const rows = quotation.proposals.flatMap((proposal) =>
     proposal.conditions.map((condition) => ({
       proposalId: proposal.id,
@@ -72,6 +81,9 @@ export default async function CotacaoDetalhePage({ params }: PageProps) {
       amountCents: condition.amountCents,
       paymentTerms: condition.paymentTerms,
       attachmentName: condition.attachments[0]?.fileName ?? null,
+      attachmentHref: condition.attachments[0]
+        ? `/api/app/files?path=${encodeURIComponent(condition.attachments[0].storagePath)}&name=${encodeURIComponent(condition.attachments[0].fileName)}`
+        : null,
       createdAt: proposal.createdAt.toISOString(),
       googleProfileUrl: proposal.organization.googleProfileUrl,
       reclameAquiUrl: proposal.organization.reclameAquiUrl,
@@ -97,6 +109,23 @@ export default async function CotacaoDetalhePage({ params }: PageProps) {
       ? "Finalizada — Outros"
       : quotation.status.replace("_", " ");
 
+  const activityItems = buildQuotationActivityTimeline({
+    createdAt: quotation.createdAt,
+    updatedAt: quotation.updatedAt,
+    status: quotation.status,
+    otherCompanyName: quotation.otherCompanyName,
+    messages: messages.map((message) => ({
+      id: message.id,
+      body: message.body,
+      authorLabel: message.authorLabel,
+      createdAt: message.createdAt,
+    })),
+    approvedLabel:
+      quotation.status === "aprovada"
+        ? "Proposta aprovada / cotação encerrada"
+        : undefined,
+  });
+
   return (
     <div className="mx-auto max-w-5xl space-y-6">
       <div>
@@ -108,6 +137,31 @@ export default async function CotacaoDetalhePage({ params }: PageProps) {
           {quotation.category.name} · {quotation.serviceItem.name}
         </h1>
         <p className="mt-2 text-neutral-600">{quotation.condominium.name}</p>
+        {(canDownloadProposals || canDownloadRif) && (
+          <div className="mt-4 flex flex-wrap gap-2">
+            {canDownloadProposals ? (
+              <a
+                href={`/api/app/quotations/${quotation.id}/proposals-export`}
+                className="inline-flex rounded-xl bg-[#9333EA] px-3 py-2 text-sm font-semibold text-white"
+              >
+                Baixar propostas
+              </a>
+            ) : null}
+            {canDownloadRif && publishedRif ? (
+              <a
+                href={`/api/app/rif/${publishedRif.id}`}
+                className="inline-flex rounded-xl border border-[#9333EA]/30 px-3 py-2 text-sm font-semibold text-[#9333EA]"
+              >
+                Baixar RIF (HTML/PDF)
+              </a>
+            ) : null}
+          </div>
+        )}
+        {!canDownloadRif && quotation.serviceManagedByOrgId ? (
+          <p className="mt-2 text-xs text-neutral-500">
+            RIF disponível para download após publicação/liberação pela operação Cota Service.
+          </p>
+        ) : null}
       </div>
 
       <div className="grid gap-4 md:grid-cols-4">
@@ -182,35 +236,7 @@ export default async function CotacaoDetalhePage({ params }: PageProps) {
         otherFinalAmountCents={quotation.otherFinalAmountCents}
       />
 
-      <div className="rounded-2xl border border-black/5 bg-white/80 p-5">
-        <h2 className="text-lg font-semibold">Timeline de status</h2>
-        <ol className="mt-4 space-y-3">
-          {TIMELINE.map((step, index) => {
-            const active =
-              quotation.status === step.key ||
-              (step.key === "aprovada" &&
-                ["aprovada", "recusada", "cancelada", "encerrada", "finalizada_outros"].includes(
-                  quotation.status,
-                ));
-            return (
-              <li key={step.key} className="flex items-center gap-3 text-sm">
-                <span
-                  className={
-                    active
-                      ? "flex h-7 w-7 items-center justify-center rounded-full bg-[#9333EA] text-xs font-bold text-white"
-                      : "flex h-7 w-7 items-center justify-center rounded-full bg-neutral-100 text-xs font-bold text-neutral-500"
-                  }
-                >
-                  {index + 1}
-                </span>
-                <span className={active ? "font-semibold text-neutral-900" : "text-neutral-500"}>
-                  {step.label}
-                </span>
-              </li>
-            );
-          })}
-        </ol>
-      </div>
+      <QuotationActivityTimeline items={activityItems} />
     </div>
   );
 }

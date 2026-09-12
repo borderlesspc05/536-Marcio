@@ -1,2 +1,2 @@
-nome,endereco,cnpj,contato,email,telefone
-Condomínio Exemplo,Rua das Flores 100 - São Paulo SP,04252011000110,Maria Silva,maria@exemplo.com,11999990000
+nome,endereco,cnpj,contato,email,telefone,torres,unidades
+Condomínio Exemplo,Rua das Flores 100 - São Paulo SP,04252011000110,Maria Silva,maria@exemplo.com,11999990000,2,120

@@ -8,9 +8,11 @@ import { SupplierNegotiationPanel } from "@/features/negotiation/components/Supp
 import {
   getSupplierFranchiseBalance,
   assertSupplierCanAccessCategory,
+  getSupplierPlanInfo,
 } from "@/features/supplier/franchise";
 import { markOverdueCompliance } from "@/features/compliance/expire";
 import { Button } from "@/components/ui/Button";
+import { MonthYearSelect } from "@/components/ui/MonthYearSelect";
 import { acceptInviteAction } from "@/features/opportunities/actions";
 import {
   SupplierKanbanBoard,
@@ -18,6 +20,10 @@ import {
 } from "@/features/opportunities/components/SupplierKanbanBoard";
 import { deriveSupplierPipelineStage } from "@/features/opportunities/pipeline";
 import { formatPriceCents } from "@/features/billing/money";
+import {
+  isQuotationVisibleToSupplier,
+  supplierFacingQuotationLabel,
+} from "@/features/opportunities/visibility";
 
 type PageProps = {
   searchParams: Promise<{
@@ -54,16 +60,12 @@ export default async function OportunidadesPage({ searchParams }: PageProps) {
     periodFilter = { gte: start, lt: end };
   }
 
-  const [franchise, overdueDocs, categories, invites] = await Promise.all([
+  const [franchise, overdueDocs, planInfo, invitesRaw] = await Promise.all([
     getSupplierFranchiseBalance(session.organizationId),
     firestoreDb.complianceDocument.count({
       where: { organizationId: session.organizationId, status: "em_atraso" },
     }),
-    firestoreDb.serviceCategory.findMany({
-      where: { isActive: true, deletedAt: null },
-      orderBy: { sortOrder: "asc" },
-      select: { id: true, name: true },
-    }),
+    getSupplierPlanInfo(session.organizationId),
     firestoreDb.quotationInvite.findMany({
       where: {
         supplierOrgId: session.organizationId,
@@ -74,7 +76,7 @@ export default async function OportunidadesPage({ searchParams }: PageProps) {
           ? {
               OR: [
                 { quotation: { publicId: { contains: query } } },
-                { quotation: { description: { contains: query } } },
+                { quotation: { condominium: { name: { contains: query } } } },
               ],
             }
           : {}),
@@ -91,12 +93,28 @@ export default async function OportunidadesPage({ searchParams }: PageProps) {
         proposal: {
           include: {
             conditions: { include: { attachments: true }, orderBy: { sortOrder: "asc" } },
+            messages: {
+              orderBy: { createdAt: "asc" },
+              include: { organization: { select: { name: true } } },
+            },
           },
         },
       },
       orderBy: { createdAt: "desc" },
     }),
   ]);
+
+  const categories = planInfo.categories.map((category) => ({
+    id: category.id,
+    name: category.name,
+  }));
+
+  const invites = invitesRaw.filter((invite) =>
+    isQuotationVisibleToSupplier({
+      status: invite.quotation.status,
+      servicePipelineStatus: invite.quotation.servicePipelineStatus,
+    }),
+  );
 
   const kanbanCards: SupplierKanbanCard[] = invites.map((invite) => {
     const firstCondition = invite.proposal?.conditions[0];
@@ -111,7 +129,10 @@ export default async function OportunidadesPage({ searchParams }: PageProps) {
       createdAt: invite.createdAt.toISOString(),
       proposalValue: firstCondition ? formatPriceCents(firstCondition.amountCents) : null,
       proposalValueCents: firstCondition?.amountCents ?? null,
-      officialStatus: invite.proposal?.status ?? invite.status,
+      officialStatus: supplierFacingQuotationLabel({
+        status: invite.quotation.status,
+        servicePipelineStatus: invite.quotation.servicePipelineStatus,
+      }),
       stage: deriveSupplierPipelineStage({
         savedStage: invite.supplierPipelineStage,
         inviteStatus: invite.status,
@@ -181,7 +202,7 @@ export default async function OportunidadesPage({ searchParams }: PageProps) {
         <input
           name="q"
           defaultValue={query}
-          placeholder="Buscar ID ou descrição"
+          placeholder="Buscar ID ou condomínio"
           className="h-11 rounded-xl border border-black/10 px-3 text-sm"
         />
         <select
@@ -199,20 +220,19 @@ export default async function OportunidadesPage({ searchParams }: PageProps) {
           defaultValue={categoryId ?? ""}
           className="h-11 rounded-xl border border-black/10 px-3 text-sm"
         >
-          <option value="">Todas as categorias</option>
+          <option value="">Categorias do meu plano</option>
           {categories.map((category) => (
             <option key={category.id} value={category.id}>
               {category.name}
             </option>
           ))}
         </select>
-        <input
-          type="month"
-          name="yearMonth"
-          defaultValue={yearMonth ?? ""}
-          className="h-11 rounded-xl border border-black/10 px-3 text-sm"
-          aria-label="Período (mês/ano)"
-        />
+        {categories.length === 0 ? (
+          <p className="md:col-span-5 text-xs text-amber-700">
+            Nenhuma categoria no pacote. Configure em Meu Plano para filtrar oportunidades.
+          </p>
+        ) : null}
+        <MonthYearSelect name="yearMonth" defaultValue={yearMonth ?? ""} />
         <button type="submit" className="h-11 rounded-xl bg-black/[0.04] px-4 text-sm font-semibold">
           Filtrar
         </button>
@@ -235,7 +255,13 @@ export default async function OportunidadesPage({ searchParams }: PageProps) {
                       {invite.quotation.serviceItem.name} · Urgência {invite.quotation.urgency}
                     </p>
                     <p className="mt-1 text-xs text-neutral-500">
-                      Status convite: {invite.status}
+                      Status solicitante:{" "}
+                      {supplierFacingQuotationLabel({
+                        status: invite.quotation.status,
+                        servicePipelineStatus: invite.quotation.servicePipelineStatus,
+                      })}
+                      {" · "}
+                      Convite: {invite.status}
                       {invite.proposal ? ` · Proposta: ${invite.proposal.status}` : ""}
                     </p>
                   </div>
@@ -300,8 +326,18 @@ export default async function OportunidadesPage({ searchParams }: PageProps) {
                             ))}
                           </ul>
                         </div>
-                        {invite.proposal.status === "em_negociacao" ? (
-                          <SupplierNegotiationPanel proposalId={invite.proposal.id} />
+                        {invite.proposal.status === "em_negociacao" ||
+                        (invite.proposal.messages?.length ?? 0) > 0 ? (
+                          <SupplierNegotiationPanel
+                            proposalId={invite.proposal.id}
+                            canChat={invite.proposal.status === "em_negociacao"}
+                            messages={(invite.proposal.messages ?? []).map((message) => ({
+                              id: message.id,
+                              body: message.body,
+                              authorLabel: message.organization.name,
+                              createdAt: message.createdAt.toISOString(),
+                            }))}
+                          />
                         ) : null}
                       </div>
                     ) : invite.status === "aceito" || invite.status === "pendente" ? (

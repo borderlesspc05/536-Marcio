@@ -12,6 +12,20 @@ export type StoredFile = {
 
 const MAX_BYTES = 10 * 1024 * 1024;
 
+async function storeLocalFile(objectPath: string, file: File, bytes: Buffer): Promise<StoredFile> {
+  const localRelative = path.join("uploads", objectPath.replace(/\//g, path.sep));
+  const localPath = path.join(process.cwd(), localRelative);
+  await mkdir(path.dirname(localPath), { recursive: true });
+  await writeFile(localPath, bytes);
+
+  return {
+    fileName: file.name,
+    storagePath: `local://${path.relative(process.cwd(), localPath).replace(/\\/g, "/")}`,
+    contentType: file.type || "application/octet-stream",
+    sizeBytes: file.size,
+  };
+}
+
 async function storeFile(objectPath: string, file: File): Promise<StoredFile> {
   if (file.size > MAX_BYTES) {
     throw new Error("Arquivo excede 10MB.");
@@ -20,32 +34,31 @@ async function storeFile(objectPath: string, file: File): Promise<StoredFile> {
   const bytes = Buffer.from(await file.arrayBuffer());
 
   if (isFirebaseAdminConfigured()) {
-    const bucket = getAdminStorage().bucket();
-    const remote = bucket.file(objectPath);
-    await remote.save(bytes, {
-      contentType: file.type || "application/octet-stream",
-      metadata: { cacheControl: "private, max-age=0" },
-    });
+    try {
+      const bucket = getAdminStorage().bucket();
+      if (!bucket.name) {
+        throw new Error("FIREBASE_STORAGE_BUCKET não configurado.");
+      }
+      const remote = bucket.file(objectPath);
+      await remote.save(bytes, {
+        contentType: file.type || "application/octet-stream",
+        metadata: { cacheControl: "private, max-age=0" },
+      });
 
-    return {
-      fileName: file.name,
-      storagePath: `gs://${bucket.name}/${objectPath}`,
-      contentType: file.type || "application/octet-stream",
-      sizeBytes: file.size,
-    };
+      return {
+        fileName: file.name,
+        storagePath: `gs://${bucket.name}/${objectPath}`,
+        contentType: file.type || "application/octet-stream",
+        sizeBytes: file.size,
+      };
+    } catch (error) {
+      // Bucket ausente / sem permissão: não quebra upload local (logo, compliance, anexos)
+      console.warn("[storage] Firebase Storage indisponível, usando disco local.", error);
+      return storeLocalFile(objectPath, file, bytes);
+    }
   }
 
-  const localRelative = path.join("uploads", objectPath.replace(/\//g, path.sep));
-  const localPath = path.join(process.cwd(), localRelative);
-  await mkdir(path.dirname(localPath), { recursive: true });
-  await writeFile(localPath, bytes);
-
-  return {
-    fileName: file.name,
-    storagePath: `local://${path.relative(process.cwd(), localPath)}`,
-    contentType: file.type || "application/octet-stream",
-    sizeBytes: file.size,
-  };
+  return storeLocalFile(objectPath, file, bytes);
 }
 
 function withSafeName(prefix: string, fileName: string): string {
@@ -71,6 +84,17 @@ export async function storeComplianceDocument(input: {
 }): Promise<StoredFile> {
   const objectPath = withSafeName(
     `organizations/${input.organizationId}/compliance`,
+    input.file.name,
+  );
+  return storeFile(objectPath, input.file);
+}
+
+export async function storeOrganizationLogo(input: {
+  organizationId: string;
+  file: File;
+}): Promise<StoredFile> {
+  const objectPath = withSafeName(
+    `organizations/${input.organizationId}/brand`,
     input.file.name,
   );
   return storeFile(objectPath, input.file);

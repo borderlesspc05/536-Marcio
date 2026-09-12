@@ -15,7 +15,9 @@ export type ImportResult = {
   ok: boolean;
   message?: string;
   created: number;
+  updated: number;
   errors: Array<{ line: number; message: string }>;
+  duplicates: Array<{ line: number; existingId: string; name: string; message: string }>;
 };
 
 const ALLOWED_TYPES = [OrganizationType.sindico, OrganizationType.administradora];
@@ -155,10 +157,10 @@ export async function importCondominiumsAction(formData: FormData): Promise<Impo
     const session = await requireSolicitante();
     const file = formData.get("file");
     if (!(file instanceof File)) {
-      return { ok: false, message: "Selecione um arquivo CSV.", created: 0, errors: [] };
+      return { ok: false, message: "Selecione um arquivo CSV.", created: 0, updated: 0, errors: [], duplicates: [] };
     }
     if (file.size > MAX_IMPORT_BYTES) {
-      return { ok: false, message: "Arquivo excede 2MB.", created: 0, errors: [] };
+      return { ok: false, message: "Arquivo excede 2MB.", created: 0, updated: 0, errors: [], duplicates: [] };
     }
 
     const text = await file.text();
@@ -173,12 +175,37 @@ export async function importCondominiumsAction(formData: FormData): Promise<Impo
         ok: false,
         message: `Limite de ${MAX_IMPORT_ROWS} linhas por upload.`,
         created: 0,
+        updated: 0,
         errors: [],
+        duplicates: [],
       };
     }
 
+    const existing = await firestoreDb.condominium.findMany({
+      where: { organizationId: session.organizationId, archivedAt: null },
+      select: { id: true, name: true, document: true, address: true },
+    });
+
     let created = 0;
+    let updated = 0;
     const errors: Array<{ line: number; message: string }> = [];
+    const duplicates: Array<{ line: number; existingId: string; name: string; message: string }> = [];
+
+    type PreparedRow = {
+      line: number;
+      name: string;
+      address: string;
+      document: string;
+      contactName: string;
+      contactEmail: string;
+      contactPhone: string;
+      towers: number | null;
+      units: number | null;
+      matchId: string | null;
+      duplicateMessage: string | null;
+    };
+
+    const prepared: PreparedRow[] = [];
 
     for (const [index, row] of parsed.data.entries()) {
       const line = index + 2;
@@ -188,28 +215,129 @@ export async function importCondominiumsAction(formData: FormData): Promise<Impo
       const contactName = (row.contato || row.contact || row.contactname || "").trim();
       const contactEmail = (row.email || row.contactemail || "").trim();
       const contactPhone = (row.telefone || row.phone || row.contactphone || "").trim();
+      const towersRaw = (row.torres || row.towers || "").trim();
+      const unitsRaw = (row.unidades || row.units || "").trim();
 
-      if (!name || !address) {
-        errors.push({ line, message: "Nome e endereço são obrigatórios." });
+      const missing: string[] = [];
+      if (!name) missing.push("nome");
+      if (!address) missing.push("endereco");
+      if (!documentRaw) missing.push("cnpj");
+      if (!contactName) missing.push("contato");
+      if (!contactEmail) missing.push("email");
+      if (!contactPhone) missing.push("telefone");
+      if (missing.length > 0) {
+        errors.push({
+          line,
+          message: `Campos obrigatórios incompletos: ${missing.join(", ")}. Corrija antes de importar.`,
+        });
         continue;
       }
 
-      const document = documentRaw ? onlyDigits(documentRaw) : undefined;
-      if (document && !isValidCnpj(document)) {
+      const document = onlyDigits(documentRaw);
+      if (!isValidCnpj(document)) {
         errors.push({ line, message: "CNPJ inválido." });
         continue;
       }
 
-      await firestoreDb.condominium.create({
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contactEmail)) {
+        errors.push({ line, message: "E-mail inválido." });
+        continue;
+      }
+
+      const towers = towersRaw ? Number(towersRaw) : null;
+      const units = unitsRaw ? Number(unitsRaw) : null;
+      if (towersRaw && (!Number.isFinite(towers) || (towers ?? 0) <= 0)) {
+        errors.push({ line, message: "Torres deve ser um número positivo." });
+        continue;
+      }
+      if (unitsRaw && (!Number.isFinite(units) || (units ?? 0) <= 0)) {
+        errors.push({ line, message: "Unidades deve ser um número positivo." });
+        continue;
+      }
+
+      const byDocument = existing.find((item) => item.document && item.document === document);
+      const byName = existing.find(
+        (item) => item.name.trim().toLowerCase() === name.toLowerCase(),
+      );
+      const match = byDocument ?? byName;
+      const duplicateMessage = match
+        ? byDocument
+          ? `CNPJ já cadastrado (${match.name}). O registro existente será atualizado.`
+          : `Nome semelhante já cadastrado (${match.name}). O registro existente será atualizado.`
+        : null;
+
+      if (match && duplicateMessage) {
+        duplicates.push({
+          line,
+          existingId: match.id,
+          name: match.name,
+          message: duplicateMessage,
+        });
+      }
+
+      prepared.push({
+        line,
+        name,
+        address,
+        document,
+        contactName,
+        contactEmail,
+        contactPhone,
+        towers,
+        units,
+        matchId: match?.id ?? null,
+        duplicateMessage,
+      });
+    }
+
+    if (errors.length > 0) {
+      return {
+        ok: false,
+        message: `Importação bloqueada: ${errors.length} linha(s) com dados incompletos ou inválidos. Corrija e envie novamente.`,
+        created: 0,
+        updated: 0,
+        errors,
+        duplicates,
+      };
+    }
+
+    for (const row of prepared) {
+      if (row.matchId) {
+        await firestoreDb.condominium.update({
+          where: { id: row.matchId },
+          data: {
+            name: row.name,
+            address: row.address,
+            document: row.document,
+            contactName: row.contactName,
+            contactEmail: row.contactEmail,
+            contactPhone: row.contactPhone,
+            towers: row.towers,
+            units: row.units,
+          },
+        });
+        updated += 1;
+        continue;
+      }
+
+      const createdRow = await firestoreDb.condominium.create({
         data: {
           organizationId: session.organizationId,
-          name,
-          address,
-          document: document || null,
-          contactName: contactName || null,
-          contactEmail: contactEmail || null,
-          contactPhone: contactPhone || null,
+          name: row.name,
+          address: row.address,
+          document: row.document,
+          contactName: row.contactName,
+          contactEmail: row.contactEmail,
+          contactPhone: row.contactPhone,
+          towers: row.towers,
+          units: row.units,
         },
+      });
+      existing.push({
+        id: createdRow.id,
+        name: row.name,
+        document: row.document,
+        address: row.address,
       });
       created += 1;
     }
@@ -218,17 +346,28 @@ export async function importCondominiumsAction(formData: FormData): Promise<Impo
       userId: session.userId,
       action: "condominium.imported",
       entityType: "condominium",
-      metadata: { created, errors: errors.length },
+      metadata: { created, updated, errors: errors.length, duplicates: duplicates.length },
     });
     revalidatePath("/app/condominios");
 
     return {
       ok: true,
-      message: `Importação concluída: ${created} criados, ${errors.length} com erro.`,
+      message: `Importação concluída: ${created} criados, ${updated} atualizados${
+        duplicates.length ? `, ${duplicates.length} duplicata(s) atualizada(s)` : ""
+      }.`,
       created,
+      updated,
       errors,
+      duplicates,
     };
   } catch (error) {
-    return { ok: false, message: toPublicErrorMessage(error), created: 0, errors: [] };
+    return {
+      ok: false,
+      message: toPublicErrorMessage(error),
+      created: 0,
+      updated: 0,
+      errors: [],
+      duplicates: [],
+    };
   }
 }

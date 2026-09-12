@@ -20,11 +20,12 @@ export default async function ExternalApproverQuotationDetailPage({ params }: Pa
 
   const pending = !quotation.externalApproval;
   const rif = quotation.rifAnalyses[0] ?? null;
+  const hasIndicated = Boolean(quotation.approvedProposalId);
 
   return (
     <div className="space-y-6">
       <div>
-        <Link href="/app/aprovador/cotacoes" className="text-sm font-semibold text-[#9333EA]">
+        <Link href="/app/aprovador/cotacoes" className="text-sm font-semibold text-[#c10089]">
           ← Minhas Cotações
         </Link>
         <h1 className="mt-2 text-3xl font-bold text-neutral-900">{quotation.publicId}</h1>
@@ -33,7 +34,27 @@ export default async function ExternalApproverQuotationDetailPage({ params }: Pa
         </p>
       </div>
 
+      {pending ? (
+        <section className="space-y-2 rounded-2xl border border-[#c10089]/20 bg-[#FFF7FB] p-4 text-sm text-[#9a006e]">
+          <p className="font-semibold">Sua decisão fecha o fluxo e libera o contato ao fornecedor.</p>
+          <ul className="list-disc space-y-1 pl-5">
+            <li>
+              {hasIndicated
+                ? "Há proposta indicada pelo Aceite Master (destaque no quadro)."
+                : "Aguarde indicação do Master — ainda sem proposta destacada."}
+            </li>
+            <li>
+              {rif
+                ? "RIF publicado disponível abaixo (baixe se precisar)."
+                : "RIF ainda não publicado — peça ao Master Service publicar a análise."}
+            </li>
+            <li>Aprovar confirma o vencedor; Recusar devolve o caso à operação.</li>
+          </ul>
+        </section>
+      ) : null}
+
       <ExternalComparativePanel
+        quotationId={quotation.id}
         proposals={quotation.proposals}
         approvedProposalId={quotation.approvedProposalId}
         rif={

@@ -89,7 +89,7 @@ export async function runDistributionEngine(quotationId: string): Promise<Distri
       },
       franchiseUsages: { where: { yearMonth } },
       favoritedBy: {
-        where: { organizationId: quotation.organizationId },
+        where: { ownerOrgId: quotation.organizationId },
       },
     },
   });

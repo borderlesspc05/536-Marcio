@@ -122,15 +122,23 @@ export async function dispatchDomainEvent(input: {
     }
     case "negotiation.started":
     case "negotiation.message": {
-      const targets = [asString(payload.solicitanteOrgId), asString(payload.supplierOrgId)].filter(
-        Boolean,
-      ) as string[];
+      const supplierOrgIds = Array.isArray(payload.supplierOrgIds)
+        ? payload.supplierOrgIds.filter((id): id is string => typeof id === "string" && id.length > 0)
+        : [];
+      const singleSupplier = asString(payload.supplierOrgId);
+      const targets = [
+        ...new Set(
+          [asString(payload.solicitanteOrgId), singleSupplier, ...supplierOrgIds].filter(
+            (id): id is string => Boolean(id),
+          ),
+        ),
+      ].filter((orgId) => orgId !== input.organizationId);
       for (const orgId of targets) {
         await notifyOrgMembers(orgId, {
           type: input.type,
           title: input.type === "negotiation.started" ? "Negociação iniciada" : "Nova mensagem na negociação",
           body: asString(payload.preview) ?? "Há uma atualização na negociação da cotação.",
-          href: hrefQuotation,
+          href: orgId === asString(payload.solicitanteOrgId) ? hrefQuotation : "/app/oportunidades",
           metadata: payload,
         });
       }

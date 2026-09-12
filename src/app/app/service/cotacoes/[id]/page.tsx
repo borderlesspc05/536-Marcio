@@ -14,7 +14,11 @@ import {
   solicitanteConfirmAcceptAction,
 } from "@/features/master-service/actions";
 import { ServiceActionForm } from "@/features/master-service/components/ServiceActionForm";
-import { formAction } from "@/lib/form-action";
+import {
+  ServiceOpsChips,
+  ServiceOpsNextStep,
+} from "@/features/master-service/components/ServiceOpsBadges";
+import { getServiceOpsSnapshot } from "@/features/master-service/ops-status";
 import { formatDateTimePt } from "@/lib/format-date";
 import { formatPriceCents } from "@/features/billing/money";
 import { Button } from "@/components/ui/Button";
@@ -30,12 +34,13 @@ export default async function ServiceCotacaoDetailPage({ params }: PageProps) {
   if (!quotation) notFound();
 
   const brand = quotation.serviceClient;
+  const ops = getServiceOpsSnapshot(quotation);
 
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <Link href="/app/service/cotacoes" className="text-sm font-semibold text-[#9333EA]">
+          <Link href="/app/service/cotacoes" className="text-sm font-semibold text-[#c10089]">
             ← Pipeline
           </Link>
           <h1 className="mt-2 text-3xl font-bold text-neutral-900">{quotation.publicId}</h1>
@@ -53,6 +58,19 @@ export default async function ServiceCotacaoDetailPage({ params }: PageProps) {
           </p>
         </div>
       </div>
+
+      <section className="space-y-3 rounded-2xl border border-black/5 bg-white/90 p-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-sm font-semibold text-neutral-800">Status da operação</p>
+          {ops.rifVisibleToClient ? (
+            <span className="text-xs font-semibold text-emerald-700">Visível ao solicitante</span>
+          ) : (
+            <span className="text-xs text-neutral-500">Ainda não liberado ao solicitante</span>
+          )}
+        </div>
+        <ServiceOpsChips ops={ops} />
+        <ServiceOpsNextStep ops={ops} />
+      </section>
 
       <div className="grid gap-4 lg:grid-cols-3">
         <section className="rounded-2xl border border-black/5 bg-white/80 p-5 lg:col-span-2">
@@ -94,7 +112,7 @@ export default async function ServiceCotacaoDetailPage({ params }: PageProps) {
 
         <section className="rounded-2xl border border-black/5 bg-white/80 p-5">
           <h2 className="font-semibold">Ações do Master</h2>
-          <form action={formAction(setServicePipelineStatusAction)} className="mt-3 space-y-2">
+          <ServiceActionForm action={setServicePipelineStatusAction} className="mt-3 space-y-2">
             <input type="hidden" name="quotationId" value={quotation.id} />
             <select
               name="status"
@@ -110,19 +128,23 @@ export default async function ServiceCotacaoDetailPage({ params }: PageProps) {
             <Button type="submit" variant="secondary" className="w-full">
               Atualizar pipeline
             </Button>
-          </form>
-          <ServiceActionForm action={dispatchServiceQuotationAction} className="mt-3">
+          </ServiceActionForm>
+          <ServiceActionForm
+            action={dispatchServiceQuotationAction}
+            className="mt-3"
+            pendingLabel="Disparando convites…"
+          >
             <input type="hidden" name="quotationId" value={quotation.id} />
             <Button type="submit" className="w-full">
               Disparar / Em Andamento
             </Button>
           </ServiceActionForm>
-          <form action={formAction(markServiceRejectedAction)} className="mt-2">
+          <ServiceActionForm action={markServiceRejectedAction} className="mt-2">
             <input type="hidden" name="quotationId" value={quotation.id} />
             <Button type="submit" variant="secondary" className="w-full">
               Marcar recusada
             </Button>
-          </form>
+          </ServiceActionForm>
         </section>
       </div>
 
@@ -228,6 +250,7 @@ export default async function ServiceCotacaoDetailPage({ params }: PageProps) {
             <ServiceActionForm
               action={generateRifAction}
               className="mt-4 flex flex-wrap items-center gap-3"
+              pendingLabel="Gerando Análise RIF…"
             >
               <input type="hidden" name="quotationId" value={quotation.id} />
               <label className="flex items-center gap-2 text-sm">
@@ -291,8 +314,8 @@ export default async function ServiceCotacaoDetailPage({ params }: PageProps) {
           </div>
           <div className="border-t border-black/5 pt-4">
             <h3 className="font-medium">Aprovado com fornecedor externo</h3>
-            <form
-              action={formAction(markServiceExternalApprovalAction)}
+            <ServiceActionForm
+              action={markServiceExternalApprovalAction}
               className="mt-3 grid gap-2"
             >
               <input type="hidden" name="quotationId" value={quotation.id} />
@@ -311,7 +334,7 @@ export default async function ServiceCotacaoDetailPage({ params }: PageProps) {
               <Button type="submit" variant="secondary">
                 Registrar aprovação externa
               </Button>
-            </form>
+            </ServiceActionForm>
           </div>
           {quotation.contactReleasedAt ? (
             <p className="text-sm text-emerald-700">

@@ -72,8 +72,8 @@ export function SupplierCategoriesForm({
         setUpgradeRequired(true);
         setError(
           isFree && !allowExtraFree
-            ? "Plano Free contempla apenas 1 categoria e 1 segmento por mês. Faça upgrade para adicionar mais."
-            : `Limite do plano: ${maxCategories} categoria(s) e ${maxSegments} segmento(s).`,
+            ? "Plano Free contempla 1 categoria + 1 subcategoria (segmento). Faça upgrade para adicionar mais."
+            : `Limite do plano: ${maxCategories} categoria(s) e ${maxSegments} subcategoria(s).`,
         );
         return prev;
       }
@@ -136,7 +136,9 @@ export function SupplierCategoriesForm({
       }}
     >
       <p className="text-sm text-neutral-600">
-        Clique na categoria mãe para abrir os segmentos. Selecionados:{" "}
+        Selecione <strong>1 categoria</strong> e, dentro dela, <strong>1 subcategoria (segmento)</strong>.
+        Plano Free: {maxCategories} categoria + {maxSegments} subcategoria — acima disso é upgrade.
+        Selecionados:{" "}
         <strong>
           {selectedCategoryCount}/{maxCategories}
         </strong>{" "}
@@ -144,7 +146,7 @@ export function SupplierCategoriesForm({
         <strong>
           {selectedSegmentCount}/{maxSegments}
         </strong>{" "}
-        segmentos
+        subcategorias
         {allowExtraFree ? " (liberação piloto ativa)" : ""}.
       </p>
 
@@ -162,13 +164,16 @@ export function SupplierCategoriesForm({
                 <span>
                   {category.name}
                   {selectedInCategory.length > 0
-                    ? ` · ${selectedInCategory.length} segmento(s)`
+                    ? ` · ${selectedInCategory.length} subcategoria(s)`
                     : ""}
                 </span>
                 <span className="text-neutral-400">{open ? "−" : "+"}</span>
               </button>
               {open ? (
                 <div className="space-y-3 border-t border-black/5 px-4 py-3">
+                  <p className="text-xs text-neutral-500">
+                    Escolha 1 subcategoria dentro desta categoria (plano Free).
+                  </p>
                   {category.segments.map((segment) => {
                     const checked = isSelected(category.id, segment.id);
                     return (
@@ -180,7 +185,7 @@ export function SupplierCategoriesForm({
                             onChange={() => toggleSegment(category.id, segment.id)}
                           />
                           <span className="font-medium">{segment.name}</span>
-                          <span className="text-xs text-neutral-400">segmento</span>
+                          <span className="text-xs text-neutral-400">subcategoria</span>
                         </label>
                         {checked ? (
                           <div className="mt-2 grid gap-2 sm:grid-cols-3">

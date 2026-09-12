@@ -75,6 +75,8 @@ export async function externalApproveQuotationAction(formData: FormData): Promis
           approvedByUserId: session.userId,
           proposalId: winningProposalId,
           reason,
+          rejected: false,
+          approvedAt: new Date(),
           nextContractDate: nextContractNotApplicable ? null : nextContractDate,
           nextContractNotApplicable,
           ip,
@@ -154,6 +156,7 @@ export async function externalApproveQuotationAction(formData: FormData): Promis
 
     revalidatePath("/app/aprovador/cotacoes");
     revalidatePath(`/app/aprovador/cotacoes/${quotationId}`);
+    revalidatePath("/app/aprovador/calendario");
     revalidatePath("/app/calendario");
     revalidatePath("/app/service/calendario");
     return { ok: true, message: "Cotação aprovada com sucesso." };
@@ -191,6 +194,7 @@ export async function externalRejectQuotationAction(formData: FormData): Promise
           approvedByUserId: session.userId,
           reason,
           rejected: true,
+          approvedAt: new Date(),
           rejectionReason: reason,
           nextContractNotApplicable: true,
           ip,
@@ -469,6 +473,75 @@ export async function removeExternalApproverAction(formData: FormData): Promise<
 
     revalidatePath("/app/equipe");
     return { ok: true, message: "Aprovador removido." };
+  } catch (error) {
+    return { ok: false, message: toPublicErrorMessage(error) };
+  }
+}
+
+export async function resendExternalApproverAccessAction(formData: FormData): Promise<ActionResult> {
+  try {
+    const session = await requireAuthorizedSessionForInvite();
+    const userId = String(formData.get("userId") ?? "").trim();
+    if (!userId) return { ok: false, message: "Usuário inválido." };
+
+    const membership = await firestoreDb.organizationMember.findUnique({
+      where: {
+        userId_organizationId: {
+          userId,
+          organizationId: session.organizationId,
+        },
+      },
+      include: { user: true },
+    });
+    if (!membership || membership.role !== MemberRole.external_approver) {
+      return { ok: false, message: "Aprovador externo não encontrado." };
+    }
+
+    const { randomBytes } = await import("crypto");
+    const { hashPassword } = await import("@/lib/auth/password");
+    const tempPassword = `Aprovador@${randomBytes(3).toString("hex")}`;
+    await firestoreDb.user.update({
+      where: { id: userId },
+      data: { passwordHash: await hashPassword(tempPassword) },
+    });
+
+    const serviceClient = await firestoreDb.serviceClient.findUnique({
+      where: { clientOrgId: session.organizationId },
+    });
+    const { sendTemplatedEmail } = await import("@/features/notifications/email-provider");
+    const portalHint = serviceClient?.solicitationLinkSlug
+      ? `\nPortal: /s/${serviceClient.solicitationLinkSlug} ou /acesse`
+      : "\nAcesse /acesse para entrar.";
+    await sendTemplatedEmail({
+      toEmail: membership.user.email,
+      subject: "CotaCondo — reenvio de acesso (Aprovador Externo)",
+      bodyText: [
+        `Olá ${membership.user.name},`,
+        "",
+        "Seu acesso de Aprovador Externo foi reenviado.",
+        `E-mail: ${membership.user.email}`,
+        `Senha temporária: ${tempPassword}`,
+        portalHint,
+      ].join("\n"),
+      template: "external_approver_resend",
+      metadata: { userId, organizationId: session.organizationId },
+    });
+
+    await writeAuditLog({
+      userId: session.userId,
+      action: "external_approver.access_resent",
+      entityType: "User",
+      entityId: userId,
+    });
+
+    revalidatePath("/app/equipe");
+    return {
+      ok: true,
+      message:
+        process.env.NEXT_PUBLIC_APP_ENV !== "production"
+          ? `Acesso reenviado. Senha temp: ${tempPassword}`
+          : "Acesso reenviado por e-mail.",
+    };
   } catch (error) {
     return { ok: false, message: toPublicErrorMessage(error) };
   }

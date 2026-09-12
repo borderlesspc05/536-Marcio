@@ -35,7 +35,8 @@ export async function listExternalApproverQuotations(input: {
       : input.tab === "aprovadas"
         ? {
             ...baseWhere,
-            externalApproval: { rejected: false },
+            // rejected pode estar ausente em registros antigos — aceita qualquer não-recusado
+            externalApproval: { rejected: { not: true } },
             servicePipelineStatus: "aprovada" as ServicePipelineStatus,
           }
         : {

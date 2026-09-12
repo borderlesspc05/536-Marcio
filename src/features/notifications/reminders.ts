@@ -121,5 +121,10 @@ export async function runReminderJob(now = new Date()) {
   const reminderDays = parseReminderDays(settings?.reminderDaysJson);
   const solicitante = await remindSolicitantes(reminderDays, now);
   const fornecedor = await remindFornecedores(now);
-  return { solicitante, fornecedor, reminderDays };
+  const { remindComplianceExpiring, markOverdueCompliance } = await import(
+    "@/features/compliance/expire"
+  );
+  const overdue = await markOverdueCompliance();
+  const compliance = await remindComplianceExpiring(now);
+  return { solicitante, fornecedor, overdue, compliance, reminderDays };
 }

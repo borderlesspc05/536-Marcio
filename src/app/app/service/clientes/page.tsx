@@ -3,6 +3,7 @@ import { OrganizationType } from "@/lib/domain/types";
 import { requireAuthorizedSession } from "@/lib/auth/guards";
 import { listServiceClients } from "@/features/master-service/data";
 import { createServiceClientAction } from "@/features/master-service/actions";
+import { publicWhitelabelUrl } from "@/features/master-service/whitelabel-url";
 import { firestoreDb } from "@/lib/firebase/firestore-db";
 import { formAction } from "@/lib/form-action";
 import { Button } from "@/components/ui/Button";
@@ -33,7 +34,8 @@ export default async function ServiceClientesPage() {
         </p>
         <h1 className="mt-1 text-3xl font-bold text-neutral-900">Clientes Cota Service</h1>
         <p className="mt-2 text-neutral-600">
-          Whitelabel, link de solicitação, pagamento recorrente e vínculo de gerentes.
+          Whitelabel, link de solicitação, pagamento recorrente e vínculo de gerentes. Somente
+          empresas previamente cadastradas entram neste plano.
         </p>
       </div>
 
@@ -50,28 +52,34 @@ export default async function ServiceClientesPage() {
             </tr>
           </thead>
           <tbody>
-            {clients.map((client) => (
-              <tr key={client.id} className="border-b border-black/5 last:border-0">
-                <td className="px-4 py-3 font-medium">{client.displayName}</td>
-                <td className="px-4 py-3 text-neutral-600">{client.clientOrg.name}</td>
-                <td className="px-4 py-3 text-neutral-600">
-                  /s/{client.solicitationLinkSlug}
-                  {!client.solicitationLinkActive ? (
-                    <span className="ml-2 text-xs text-amber-700">(inativo)</span>
-                  ) : null}
-                </td>
-                <td className="px-4 py-3">{client.isActive ? "Ativo" : "Bloqueado"}</td>
-                <td className="px-4 py-3">{client._count.quotations}</td>
-                <td className="px-4 py-3 text-right">
-                  <Link
-                    href={`/app/service/clientes/${client.id}`}
-                    className="font-semibold text-[#9333EA]"
-                  >
-                    Configurar
-                  </Link>
-                </td>
-              </tr>
-            ))}
+            {clients.map((client) => {
+              const link = publicWhitelabelUrl(client.solicitationLinkSlug).replace(
+                /^https?:\/\//,
+                "",
+              );
+              return (
+                <tr key={client.id} className="border-b border-black/5 last:border-0">
+                  <td className="px-4 py-3 font-medium">{client.displayName}</td>
+                  <td className="px-4 py-3 text-neutral-600">{client.clientOrg.name}</td>
+                  <td className="px-4 py-3 text-neutral-600">
+                    <span className="font-mono text-xs">{link}</span>
+                    {!client.solicitationLinkActive ? (
+                      <span className="ml-2 text-xs text-amber-700">(inativo)</span>
+                    ) : null}
+                  </td>
+                  <td className="px-4 py-3">{client.isActive ? "Ativo" : "Bloqueado"}</td>
+                  <td className="px-4 py-3">{client._count.quotations}</td>
+                  <td className="px-4 py-3 text-right">
+                    <Link
+                      href={`/app/service/clientes/${client.id}`}
+                      className="font-semibold text-[#9333EA]"
+                    >
+                      Configurar
+                    </Link>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
@@ -100,6 +108,15 @@ export default async function ServiceClientesPage() {
               name="displayName"
               required
               className="mt-1 h-10 w-full rounded-xl border border-black/10 px-3"
+            />
+          </label>
+          <label className="text-sm">
+            Slug do link (ex.: selladm)
+            <input
+              name="solicitationLinkSlug"
+              placeholder="selladm"
+              pattern="[a-z0-9-]+"
+              className="mt-1 h-10 w-full rounded-xl border border-black/10 px-3 font-mono text-sm"
             />
           </label>
           <label className="text-sm">

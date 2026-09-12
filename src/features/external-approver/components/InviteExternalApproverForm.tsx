@@ -7,6 +7,7 @@ import {
   inviteExternalApproverAction,
   type ActionResult,
 } from "@/features/external-approver/actions";
+import { CondoTagPicker } from "@/features/external-approver/components/CondoTagPicker";
 
 type Condo = { id: string; name: string };
 
@@ -41,17 +42,9 @@ export function InviteExternalApproverForm({ condominiums }: { condominiums: Con
           className="mt-1 h-10 w-full rounded-xl border border-black/10 px-3"
         />
       </label>
-      <fieldset className="md:col-span-2 text-sm">
-        <legend className="font-medium">Condomínios vinculados *</legend>
-        <div className="mt-2 grid gap-2 sm:grid-cols-2">
-          {condominiums.map((condo) => (
-            <label key={condo.id} className="flex items-center gap-2 rounded-lg bg-white px-3 py-2">
-              <input type="checkbox" name="condominiumIds" value={condo.id} />
-              {condo.name}
-            </label>
-          ))}
-        </div>
-      </fieldset>
+      <div className="md:col-span-2">
+        <CondoTagPicker condominiums={condominiums} />
+      </div>
       <div className="md:col-span-2 space-y-2">
         <Button type="submit" disabled={pending}>
           {pending ? "Cadastrando…" : "Cadastrar aprovador"}

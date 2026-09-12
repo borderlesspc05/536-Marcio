@@ -7,7 +7,7 @@ import {
   approveConditionAction,
   approveOthersAction,
   reinforceInviteAction,
-  sendNegotiationMessageAction,
+  sendNegotiationMessagesBulkAction,
   startNegotiationAction,
 } from "@/features/negotiation/actions";
 
@@ -20,6 +20,7 @@ export type CompareRow = {
   amountCents: number;
   paymentTerms: string;
   attachmentName: string | null;
+  attachmentHref: string | null;
   createdAt: string;
   googleProfileUrl: string | null;
   reclameAquiUrl: string | null;
@@ -78,14 +79,13 @@ export function QuotationComparePanel({
   const [sort, setSort] = useState<"amount" | "date">("amount");
   const [selected, setSelected] = useState<Record<string, boolean>>({});
   const [activeCondition, setActiveCondition] = useState<string | null>(null);
-  const [message, setMessage] = useState("Gostaríamos de negociar melhores condições.");
-  const [chatBody, setChatBody] = useState("");
-  const [chatProposalId, setChatProposalId] = useState<string>("");
-  const [othersOpen, setOthersOpen] = useState(false);
+  const [messageTarget, setMessageTarget] = useState<"selected" | "all">("selected");
+  const [actionMode, setActionMode] = useState<"negociar" | "aprovar" | "outros">("negociar");
+  const [chatBody, setChatBody] = useState("Gostaríamos de negociar melhores condições.");
   const [feedback, setFeedback] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const isOpen = ["aberta", "em_negociacao"].includes(quotationStatus);
+  const canNegotiate = ["aberta", "em_negociacao"].includes(quotationStatus);
 
   const sortedRows = useMemo(() => {
     const copy = [...rows];
@@ -97,9 +97,16 @@ export function QuotationComparePanel({
     return copy;
   }, [rows, sort]);
 
+  const allProposalIds = useMemo(
+    () => [...new Set(rows.map((row) => row.proposalId))],
+    [rows],
+  );
+
   const selectedProposalIds = Object.entries(selected)
     .filter(([, value]) => value)
     .map(([id]) => id);
+
+  const targetProposalIds = messageTarget === "all" ? allProposalIds : selectedProposalIds;
 
   const progressPct = Math.min(100, Math.round((proposalsCount / Math.max(maxProposals, 1)) * 100));
 
@@ -115,6 +122,35 @@ export function QuotationComparePanel({
       setFeedback(result.message ?? "OK");
       router.refresh();
     });
+  }
+
+  function sendNegotiationMessage() {
+    if (targetProposalIds.length === 0) {
+      setError(
+        messageTarget === "all"
+          ? "Não há propostas para enviar a mensagem."
+          : "Selecione ao menos uma proposta na tabela ou escolha enviar a todos.",
+      );
+      setFeedback(null);
+      return;
+    }
+    if (!chatBody.trim()) {
+      setError("Digite a mensagem no canal de negociação.");
+      setFeedback(null);
+      return;
+    }
+
+    const formData = new FormData();
+    for (const id of targetProposalIds) formData.append("proposalIds", id);
+    formData.set("message", chatBody.trim());
+    formData.set("body", chatBody.trim());
+
+    if (quotationStatus === "aberta") {
+      run(() => startNegotiationAction(formData));
+      return;
+    }
+
+    run(() => sendNegotiationMessagesBulkAction(formData));
   }
 
   return (
@@ -162,7 +198,7 @@ export function QuotationComparePanel({
                         ? ` em ${new Date(invite.acceptedAt).toLocaleDateString("pt-BR")}`
                         : ""}
                     </span>
-                    {isOpen ? (
+                    {canNegotiate ? (
                       <Button
                         type="button"
                         size="sm"
@@ -223,7 +259,26 @@ export function QuotationComparePanel({
           <table className="w-full min-w-[720px] text-left text-sm">
             <thead className="border-b border-black/5 text-neutral-500">
               <tr>
-                <th className="px-2 py-2 font-medium">Sel.</th>
+                <th className="px-2 py-2 font-medium">
+                  <label className="inline-flex items-center gap-1">
+                    <input
+                      type="checkbox"
+                      checked={
+                        allProposalIds.length > 0 &&
+                        allProposalIds.every((id) => Boolean(selected[id]))
+                      }
+                      onChange={(event) => {
+                        const next: Record<string, boolean> = {};
+                        for (const id of allProposalIds) next[id] = event.target.checked;
+                        setSelected(next);
+                        if (event.target.checked) setMessageTarget("all");
+                      }}
+                      disabled={!canNegotiate}
+                      aria-label="Selecionar todos"
+                    />
+                    Sel.
+                  </label>
+                </th>
                 <th className="px-2 py-2 font-medium">Fornecedor</th>
                 <th className="px-2 py-2 font-medium">Reputação</th>
                 <th className="px-2 py-2 font-medium">Valor</th>
@@ -246,7 +301,7 @@ export function QuotationComparePanel({
                           [row.proposalId]: event.target.checked,
                         }))
                       }
-                      disabled={!isOpen}
+                      disabled={!canNegotiate}
                     />
                   </td>
                   <td className="px-2 py-3 font-medium">{row.supplierName}</td>
@@ -282,7 +337,20 @@ export function QuotationComparePanel({
                   </td>
                   <td className="px-2 py-3">{formatMoney(row.amountCents)}</td>
                   <td className="px-2 py-3">{row.paymentTerms}</td>
-                  <td className="px-2 py-3 text-neutral-500">{row.attachmentName ?? "—"}</td>
+                  <td className="px-2 py-3 text-neutral-500">
+                    {row.attachmentHref && row.attachmentName ? (
+                      <a
+                        href={row.attachmentHref}
+                        className="font-semibold text-[#9333EA] hover:underline"
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        {row.attachmentName}
+                      </a>
+                    ) : (
+                      (row.attachmentName ?? "—")
+                    )}
+                  </td>
                   <td className="px-2 py-3 capitalize">{row.status.replace("_", " ")}</td>
                   <td className="px-2 py-3">
                     <button
@@ -293,7 +361,7 @@ export function QuotationComparePanel({
                           : "text-[#9333EA] hover:underline"
                       }`}
                       onClick={() => setActiveCondition(row.conditionId)}
-                      disabled={!isOpen}
+                      disabled={!canNegotiate}
                     >
                       {activeCondition === row.conditionId ? "Selecionada" : "Selecionar"}
                     </button>
@@ -311,87 +379,136 @@ export function QuotationComparePanel({
           </table>
         </div>
 
-        {isOpen ? (
-          <div className="mt-4 flex flex-wrap gap-2">
-            <Button
-              type="button"
-              size="sm"
-              disabled={pending || selectedProposalIds.length === 0}
-              onClick={() => {
-                const formData = new FormData();
-                for (const id of selectedProposalIds) formData.append("proposalIds", id);
-                formData.set("message", message);
-                run(() => startNegotiationAction(formData));
-              }}
+        {canNegotiate ? (
+          <div className="mt-4 space-y-3">
+            <div
+              className="flex flex-wrap gap-2"
+              role="tablist"
+              aria-label="Ações da cotação"
             >
-              Negociar selecionadas
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant="secondary"
-              disabled={pending || !activeCondition}
-              onClick={() => {
-                const row = rows.find((item) => item.conditionId === activeCondition);
-                if (!row) return;
-                const formData = new FormData();
-                formData.set("proposalId", row.proposalId);
-                formData.set("conditionId", row.conditionId);
-                run(() => approveConditionAction(formData));
-              }}
-            >
-              Aprovar condição selecionada
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant="ghost"
-              disabled={pending}
-              onClick={() => setOthersOpen((value) => !value)}
-            >
-              Aprovar Outros
-            </Button>
-          </div>
-        ) : null}
+              {(
+                [
+                  { id: "negociar", label: "Negociar selecionadas" },
+                  { id: "aprovar", label: "Aprovar condição selecionada" },
+                  { id: "outros", label: "Aprovar Outros" },
+                ] as const
+              ).map((tab) => {
+                const active = actionMode === tab.id;
+                return (
+                  <Button
+                    key={tab.id}
+                    type="button"
+                    size="sm"
+                    role="tab"
+                    aria-selected={active}
+                    variant={active ? "primary" : "secondary"}
+                    disabled={pending}
+                    onClick={() => setActionMode(tab.id)}
+                  >
+                    {tab.label}
+                  </Button>
+                );
+              })}
+            </div>
 
-        {isOpen ? (
-          <div className="mt-3">
-            <label className="text-xs font-medium text-neutral-500">Mensagem de negociação</label>
-            <textarea
-              value={message}
-              onChange={(event) => setMessage(event.target.value)}
-              rows={2}
-              className="mt-1 w-full rounded-xl border border-black/10 px-3 py-2 text-sm"
-            />
-          </div>
-        ) : null}
+            {actionMode === "negociar" ? (
+              <div className="space-y-2 rounded-xl border border-black/5 bg-black/[0.02] p-4">
+                <p className="text-sm text-neutral-700">
+                  Use os checkboxes da tabela para negociar com uma, várias ou todas as empresas.
+                  A mensagem fica no <strong>Canal de negociação</strong> abaixo e o histórico entra
+                  na timeline de status.
+                </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <select
+                    value={messageTarget}
+                    onChange={(event) => setMessageTarget(event.target.value as "selected" | "all")}
+                    className="h-10 rounded-xl border border-black/10 px-3 text-sm"
+                  >
+                    <option value="selected">Selecionadas na tabela</option>
+                    <option value="all">Todas as empresas</option>
+                  </select>
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={pending || targetProposalIds.length === 0 || !chatBody.trim()}
+                    onClick={sendNegotiationMessage}
+                  >
+                    Negociar / enviar mensagem
+                  </Button>
+                  <span className="text-xs text-neutral-500">
+                    {messageTarget === "all"
+                      ? `${allProposalIds.length} fornecedor(es)`
+                      : `${selectedProposalIds.length} selecionada(s)`}
+                  </span>
+                </div>
+              </div>
+            ) : null}
 
-        {othersOpen && isOpen ? (
-          <form
-            className="mt-4 space-y-3 rounded-xl border border-amber-200 bg-amber-50/70 p-4"
-            action={(formData) => run(() => approveOthersAction(formData))}
-          >
-            <p className="text-sm font-semibold text-amber-900">Finalizar fora da plataforma</p>
-            <input type="hidden" name="quotationId" value={quotationId} />
-            <input
-              name="companyName"
-              required
-              placeholder="Nome da empresa"
-              className="h-11 w-full rounded-xl border border-black/10 px-3 text-sm"
-            />
-            <input
-              name="finalAmount"
-              required
-              type="number"
-              min="0.01"
-              step="0.01"
-              placeholder="Valor final (R$)"
-              className="h-11 w-full rounded-xl border border-black/10 px-3 text-sm"
-            />
-            <Button type="submit" size="sm" disabled={pending}>
-              Confirmar Outros
-            </Button>
-          </form>
+            {actionMode === "aprovar" ? (
+              <div className="space-y-3 rounded-xl border border-emerald-200 bg-emerald-50/60 p-4">
+                <p className="text-sm text-emerald-900">
+                  Selecione uma condição na tabela e confirme a aprovação. Para voltar à negociação
+                  ou a Outros, use as abas acima.
+                </p>
+                <p className="text-xs text-neutral-600">
+                  {activeCondition
+                    ? `Condição selecionada: ${
+                        rows.find((item) => item.conditionId === activeCondition)?.supplierName ?? "—"
+                      } · ${formatMoney(
+                        rows.find((item) => item.conditionId === activeCondition)?.amountCents ?? 0,
+                      )}`
+                    : "Nenhuma condição selecionada ainda."}
+                </p>
+                <Button
+                  type="button"
+                  size="sm"
+                  disabled={pending || !activeCondition}
+                  onClick={() => {
+                    const row = rows.find((item) => item.conditionId === activeCondition);
+                    if (!row) return;
+                    const formData = new FormData();
+                    formData.set("proposalId", row.proposalId);
+                    formData.set("conditionId", row.conditionId);
+                    run(() => approveConditionAction(formData));
+                  }}
+                >
+                  Confirmar aprovação da condição
+                </Button>
+              </div>
+            ) : null}
+
+            {actionMode === "outros" ? (
+              <form
+                className="space-y-3 rounded-xl border border-amber-200 bg-amber-50/70 p-4"
+                action={(formData) => run(() => approveOthersAction(formData))}
+              >
+                <p className="text-sm font-semibold text-amber-900">Finalizar fora da plataforma</p>
+                <p className="text-xs text-amber-800">
+                  Para negociar ou aprovar uma condição da tabela, clique nas abas acima — não é
+                  preciso fechar este formulário.
+                </p>
+                <input type="hidden" name="quotationId" value={quotationId} />
+                <input
+                  name="companyName"
+                  required
+                  placeholder="Nome da empresa"
+                  className="h-11 w-full rounded-xl border border-black/10 px-3 text-sm"
+                />
+                <input
+                  name="finalAmount"
+                  required
+                  type="number"
+                  min="0.01"
+                  step="0.01"
+                  placeholder="Valor final (R$)"
+                  className="h-11 w-full rounded-xl border border-black/10 px-3 text-sm"
+                />
+                <Button type="submit" size="sm" disabled={pending}>
+                  Confirmar Outros
+                </Button>
+              </form>
+            ) : null}
+          </div>
         ) : null}
 
         {quotationStatus === "finalizada_outros" && otherCompanyName ? (
@@ -404,61 +521,55 @@ export function QuotationComparePanel({
 
       <div className="rounded-2xl border border-black/5 bg-white/80 p-5">
         <h2 className="text-lg font-semibold text-neutral-900">Canal de negociação</h2>
+        <p className="mt-1 text-sm text-neutral-500">
+          Único campo de mensagem. Selecione uma, várias ou todas as empresas e envie — o registro
+          aparece aqui e na timeline.
+        </p>
         <div className="mt-3 max-h-64 space-y-2 overflow-y-auto">
           {messages.length === 0 ? (
             <p className="text-sm text-neutral-500">Nenhuma mensagem ainda.</p>
           ) : (
-            messages.map((item) => (
-              <div key={item.id} className="rounded-xl bg-black/[0.03] px-3 py-2 text-sm">
-                <p className="text-xs text-neutral-500">
-                  {item.authorLabel} · {new Date(item.createdAt).toLocaleString("pt-BR")}
-                </p>
-                <p className="mt-1 text-neutral-800">{item.body}</p>
-              </div>
-            ))
+            messages.map((item) => {
+              const supplierName = rows.find((row) => row.proposalId === item.proposalId)?.supplierName;
+              return (
+                <div key={item.id} className="rounded-xl bg-black/[0.03] px-3 py-2 text-sm">
+                  <p className="text-xs text-neutral-500">
+                    {item.authorLabel}
+                    {supplierName ? ` → ${supplierName}` : ""} ·{" "}
+                    {new Date(item.createdAt).toLocaleString("pt-BR")}
+                  </p>
+                  <p className="mt-1 text-neutral-800">{item.body}</p>
+                </div>
+              );
+            })
           )}
         </div>
-        {quotationStatus === "em_negociacao" ? (
-          <form
-            className="mt-4 space-y-2"
-            action={(formData) => {
-              run(async () => {
-                const result = await sendNegotiationMessageAction(formData);
-                if (result.ok) setChatBody("");
-                return result;
-              });
-            }}
-          >
+        {canNegotiate ? (
+          <div className="mt-4 space-y-2">
             <select
-              name="proposalId"
-              required
-              value={chatProposalId}
-              onChange={(event) => setChatProposalId(event.target.value)}
+              value={messageTarget}
+              onChange={(event) => setMessageTarget(event.target.value as "selected" | "all")}
               className="h-11 w-full rounded-xl border border-black/10 px-3 text-sm"
             >
-              <option value="">Proposta para mensagem</option>
-              {[...new Set(rows.map((row) => row.proposalId))].map((proposalId) => {
-                const row = rows.find((item) => item.proposalId === proposalId)!;
-                return (
-                  <option key={proposalId} value={proposalId}>
-                    {row.supplierName}
-                  </option>
-                );
-              })}
+              <option value="selected">Enviar às empresas selecionadas na tabela</option>
+              <option value="all">Enviar a todas as empresas</option>
             </select>
             <textarea
-              name="body"
-              required
               value={chatBody}
               onChange={(event) => setChatBody(event.target.value)}
               rows={2}
               placeholder="Escreva uma mensagem..."
               className="w-full rounded-xl border border-black/10 px-3 py-2 text-sm"
             />
-            <Button type="submit" size="sm" disabled={pending}>
+            <Button
+              type="button"
+              size="sm"
+              disabled={pending || targetProposalIds.length === 0 || !chatBody.trim()}
+              onClick={sendNegotiationMessage}
+            >
               Enviar mensagem
             </Button>
-          </form>
+          </div>
         ) : null}
       </div>
 

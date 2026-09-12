@@ -12,6 +12,11 @@ import {
 import { isConsultOnlyPlan } from "@/features/billing/plan-features";
 import { getActiveSubscription } from "@/features/billing/subscriptions";
 import { startCategoryAddonCheckoutFormAction } from "@/features/billing/actions";
+import {
+  PaymentHistoryPanel,
+  formatMonthLabel,
+  mapCheckoutStatus,
+} from "@/features/billing/components/PaymentHistoryPanel";
 import { ActionForm } from "@/components/ui/ActionForm";
 import { Button } from "@/components/ui/Button";
 
@@ -44,12 +49,36 @@ export default async function MeuPlanoPage({ searchParams }: PageProps) {
     href: "/app/meu-plano",
   });
 
-  const [params, gate, subscription, catalogPlans] = await Promise.all([
+  const [params, gate, subscription, catalogPlans, checkouts] = await Promise.all([
     searchParams,
     getPlanGate(session.organizationId),
     getActiveSubscription(session.organizationId),
     listActivePlansForOrganization(session.organizationType),
+    firestoreDb.paymentCheckout.findMany({
+      where: { organizationId: session.organizationId },
+      include: { plan: { select: { name: true, slug: true } } },
+      orderBy: { createdAt: "desc" },
+      take: 24,
+    }),
   ]);
+
+  const paymentHistory = checkouts.map((checkout) => {
+    const when = checkout.paidAt ?? checkout.createdAt;
+    const status = mapCheckoutStatus(checkout.status);
+    const planSlug = checkout.plan?.slug ?? gate?.planSlug ?? null;
+    return {
+      id: checkout.id,
+      monthLabel: formatMonthLabel(when instanceof Date ? when : new Date(when)),
+      planName: checkout.plan?.name ?? "Plano",
+      status,
+      amountCents: checkout.amountCents ?? 0,
+      paidAt: checkout.paidAt ? checkout.paidAt.toISOString() : null,
+      activateHref:
+        status === "Pago" || !planSlug
+          ? null
+          : `/checkout?plan=${planSlug}`,
+    };
+  });
   const notice = params.activated
     ? "Plano ativado com sucesso."
     : params.current
@@ -99,6 +128,11 @@ export default async function MeuPlanoPage({ searchParams }: PageProps) {
           pending={subscription?.pendingPlan?.name}
         />
         <PlanNotice message={notice} />
+
+        <PaymentHistoryPanel
+          items={paymentHistory}
+          currentPlanSlug={gate?.planSlug ?? plan.planSlug}
+        />
 
         <div className="grid gap-4 md:grid-cols-3">
           <Stat
@@ -195,6 +229,7 @@ export default async function MeuPlanoPage({ searchParams }: PageProps) {
         pending={subscription?.pendingPlan?.name}
       />
       <PlanNotice message={notice} />
+      <PaymentHistoryPanel items={paymentHistory} currentPlanSlug={gate?.planSlug} />
       <div className="grid gap-4 md:grid-cols-3">
         <Stat
           label="Franquia mensal"

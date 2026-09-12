@@ -2,11 +2,9 @@ import { MemberRole, OrganizationType } from "@/lib/domain/types";
 import { requireAuthorizedSession } from "@/lib/auth/guards";
 import { firestoreDb } from "@/lib/firebase/firestore-db";
 import { inviteTeamMemberAction } from "@/features/referrals/actions";
-import {
-  removeExternalApproverAction,
-  updateExternalApproverScopesAction,
-} from "@/features/external-approver/actions";
 import { InviteExternalApproverForm } from "@/features/external-approver/components/InviteExternalApproverForm";
+import { ManageExternalApproverCard } from "@/features/external-approver/components/ManageExternalApproverCard";
+import { TeamMemberRow } from "@/features/referrals/components/TeamMemberRow";
 import { formAction } from "@/lib/form-action";
 import { Button } from "@/components/ui/Button";
 
@@ -51,7 +49,8 @@ export default async function EquipePage() {
         <p className="text-sm font-semibold uppercase tracking-wide text-[#c10089]">Equipe</p>
         <h1 className="mt-1 text-3xl font-bold text-neutral-900">Usuários da administradora</h1>
         <p className="mt-2 text-neutral-600">
-          Master convida operacionais, outros masters e aprovadores externos (síndicos).
+          Master convida operacionais, outros masters e aprovadores externos (síndicos). Edite,
+          reenvie acessos ou exclua usuários criados.
         </p>
         {serviceClient ? (
           <p className="mt-2 text-sm text-neutral-500">
@@ -70,26 +69,27 @@ export default async function EquipePage() {
               <th className="px-4 py-3 font-medium">Nome</th>
               <th className="px-4 py-3 font-medium">E-mail</th>
               <th className="px-4 py-3 font-medium">Papel</th>
-              <th className="px-4 py-3 font-medium">Escopo</th>
+              <th className="px-4 py-3 font-medium">Escopo / Ações</th>
             </tr>
           </thead>
           <tbody>
             {members.map((member) => (
-              <tr key={member.id} className="border-b border-black/5 last:border-0">
-                <td className="px-4 py-3 font-medium">{member.user.name}</td>
-                <td className="px-4 py-3 text-neutral-600">{member.user.email}</td>
-                <td className="px-4 py-3 capitalize">
-                  {member.role === MemberRole.external_approver
-                    ? "Aprovador Externo"
-                    : member.role}
-                </td>
-                <td className="px-4 py-3 text-neutral-600">
-                  {member.role === MemberRole.external_approver
+              <TeamMemberRow
+                key={member.id}
+                membershipId={member.id}
+                userId={member.userId}
+                name={member.user.name}
+                email={member.user.email}
+                role={member.role}
+                scopeLabel={
+                  member.role === MemberRole.external_approver
                     ? member.user.externalApproverScopes.map((s) => s.condominium.name).join(", ") ||
                       "—"
-                    : "—"}
-                </td>
-              </tr>
+                    : "—"
+                }
+                canManage={canInvite}
+                isSelf={member.userId === session.userId}
+              />
             ))}
           </tbody>
         </table>
@@ -129,8 +129,8 @@ export default async function EquipePage() {
           <div className="rounded-2xl border border-fuchsia-200 bg-fuchsia-50/40 p-5">
             <h2 className="font-semibold">Cadastrar Aprovador Externo</h2>
             <p className="mt-1 text-sm text-neutral-600">
-              Perfil com acesso restrito às cotações e calendário dos condomínios selecionados.
-              A senha temporária aparece na tela e também é enviada por e-mail.
+              Busque e marque condomínios como tags. A senha temporária aparece na tela e também é
+              enviada por e-mail.
             </p>
             <InviteExternalApproverForm
               condominiums={condominiums.map((condo) => ({ id: condo.id, name: condo.name }))}
@@ -140,58 +140,19 @@ export default async function EquipePage() {
           {externalApprovers.length > 0 ? (
             <div className="space-y-4">
               <h2 className="font-semibold">Gerenciar aprovadores externos</h2>
-              {externalApprovers.map((member) => {
-                const linked = new Set(
-                  member.user.externalApproverScopes.map((scope) => scope.condominiumId),
-                );
-                return (
-                  <div
-                    key={member.id}
-                    className="rounded-2xl border border-black/5 bg-white/80 p-5"
-                  >
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div>
-                        <p className="font-semibold text-neutral-900">{member.user.name}</p>
-                        <p className="text-sm text-neutral-500">{member.user.email}</p>
-                      </div>
-                      <form action={formAction(removeExternalApproverAction)}>
-                        <input type="hidden" name="userId" value={member.userId} />
-                        <Button type="submit" variant="secondary" size="sm">
-                          Excluir aprovador
-                        </Button>
-                      </form>
-                    </div>
-                    <form
-                      action={formAction(updateExternalApproverScopesAction)}
-                      className="mt-4 space-y-3"
-                    >
-                      <input type="hidden" name="userId" value={member.userId} />
-                      <fieldset className="text-sm">
-                        <legend className="font-medium">Condomínios vinculados</legend>
-                        <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                          {condominiums.map((condo) => (
-                            <label
-                              key={condo.id}
-                              className="flex items-center gap-2 rounded-lg border border-black/5 bg-neutral-50 px-3 py-2"
-                            >
-                              <input
-                                type="checkbox"
-                                name="condominiumIds"
-                                value={condo.id}
-                                defaultChecked={linked.has(condo.id)}
-                              />
-                              {condo.name}
-                            </label>
-                          ))}
-                        </div>
-                      </fieldset>
-                      <Button type="submit" size="sm">
-                        Salvar vínculos
-                      </Button>
-                    </form>
-                  </div>
-                );
-              })}
+              {externalApprovers.map((member) => (
+                <ManageExternalApproverCard
+                  key={member.id}
+                  userId={member.userId}
+                  name={member.user.name}
+                  email={member.user.email}
+                  condominiums={condominiums.map((condo) => ({
+                    id: condo.id,
+                    name: condo.name,
+                  }))}
+                  linkedIds={member.user.externalApproverScopes.map((scope) => scope.condominiumId)}
+                />
+              ))}
             </div>
           ) : null}
         </>

@@ -15,7 +15,7 @@ async function requireAdmPremium() {
     const { session } = await requireCapability({
       types: [OrganizationType.administradora],
       roles: [MemberRole.master],
-      href: "/app/favoritos",
+      href: "/app/parcerias",
       feature: "favorites",
     });
     return { session, blocked: false as const };
@@ -25,13 +25,14 @@ async function requireAdmPremium() {
   }
 }
 
+/** Preferir vincular via Parcerias; mantido para compatibilidade. */
 export async function toggleFavoriteSupplierAction(formData: FormData): Promise<ActionResult> {
   try {
     const gate = await requireAdmPremium();
     if (gate.blocked || !gate.session) {
       return {
         ok: false,
-        message: "Favoritos disponíveis apenas no plano Administradora Premium.",
+        message: "Prioridade de parceiros disponível no plano Administradora Premium (Parcerias).",
       };
     }
 
@@ -44,12 +45,10 @@ export async function toggleFavoriteSupplierAction(formData: FormData): Promise<
     });
     if (!supplier) return { ok: false, message: "Fornecedor não encontrado." };
 
-    const existing = await firestoreDb.favoriteSupplier.findUnique({
+    const existing = await firestoreDb.favoriteSupplier.findFirst({
       where: {
-        organizationId_supplierOrgId: {
-          organizationId: gate.session.organizationId,
-          supplierOrgId,
-        },
+        ownerOrgId: gate.session.organizationId,
+        supplierOrgId,
       },
     });
 
@@ -61,13 +60,14 @@ export async function toggleFavoriteSupplierAction(formData: FormData): Promise<
         entityType: "organization",
         entityId: supplierOrgId,
       });
+      revalidatePath("/app/parcerias");
       revalidatePath("/app/favoritos");
-      return { ok: true, message: "Removido dos favoritos." };
+      return { ok: true, message: "Prioridade removida." };
     }
 
     await firestoreDb.favoriteSupplier.create({
       data: {
-        organizationId: gate.session.organizationId,
+        ownerOrgId: gate.session.organizationId,
         supplierOrgId,
         categoryId,
       },
@@ -78,8 +78,9 @@ export async function toggleFavoriteSupplierAction(formData: FormData): Promise<
       entityType: "organization",
       entityId: supplierOrgId,
     });
+    revalidatePath("/app/parcerias");
     revalidatePath("/app/favoritos");
-    return { ok: true, message: "Fornecedor favoritado." };
+    return { ok: true, message: "Prioridade 1 ativada para o parceiro." };
   } catch (error) {
     return { ok: false, message: toPublicErrorMessage(error) };
   }

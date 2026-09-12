@@ -7,6 +7,8 @@ import {
   addServiceClientManagerAction,
   updateServiceClientAction,
 } from "@/features/master-service/actions";
+import { ServiceClientManagerRow } from "@/features/master-service/components/ServiceClientManagerRow";
+import { publicWhitelabelUrl } from "@/features/master-service/whitelabel-url";
 import { formAction } from "@/lib/form-action";
 import { Button } from "@/components/ui/Button";
 
@@ -19,6 +21,8 @@ export default async function ServiceClienteDetailPage({ params }: PageProps) {
   const { id } = await params;
   const client = await getServiceClient(id, session.organizationId);
   if (!client) notFound();
+
+  const publicLink = publicWhitelabelUrl(client.solicitationLinkSlug);
 
   return (
     <div className="space-y-6">
@@ -43,6 +47,15 @@ export default async function ServiceClienteDetailPage({ params }: PageProps) {
             name="displayName"
             defaultValue={client.displayName}
             className="mt-1 h-10 w-full rounded-xl border border-black/10 px-3"
+          />
+        </label>
+        <label className="text-sm">
+          Slug do link (ex.: selladm)
+          <input
+            name="solicitationLinkSlug"
+            defaultValue={client.solicitationLinkSlug}
+            pattern="[a-z0-9-]+"
+            className="mt-1 h-10 w-full rounded-xl border border-black/10 px-3 font-mono text-sm"
           />
         </label>
         <label className="text-sm">
@@ -120,7 +133,11 @@ export default async function ServiceClienteDetailPage({ params }: PageProps) {
         </label>
         <div className="md:col-span-2">
           <p className="text-xs text-neutral-500">
-            Link exclusivo: <code>/s/{client.solicitationLinkSlug}</code>
+            Link exclusivo:{" "}
+            <a href={publicLink} className="font-semibold text-[#9333EA] hover:underline" target="_blank" rel="noreferrer">
+              {publicLink.replace(/^https?:\/\//, "")}
+            </a>
+            <span className="ml-2 text-neutral-400">(/s/{client.solicitationLinkSlug} também funciona)</span>
           </p>
           <Button type="submit" className="mt-3">
             Salvar whitelabel
@@ -132,18 +149,20 @@ export default async function ServiceClienteDetailPage({ params }: PageProps) {
         <h2 className="font-semibold">Gerentes e assistentes</h2>
         <p className="mt-1 text-sm text-neutral-500">
           Todo usuário operacional fica vinculado a este cliente para relatórios por carteira.
+          Criar, editar, reenviar acesso ou excluir.
         </p>
-        <ul className="mt-4 space-y-2 text-sm">
+        <ul className="mt-4 space-y-1 text-sm">
           {client.managers.length === 0 ? (
             <li className="text-neutral-500">Nenhum gerente vinculado.</li>
           ) : (
             client.managers.map((manager) => (
-              <li key={manager.id} className="flex justify-between border-b border-black/5 py-2">
-                <span>
-                  {manager.name} · {manager.email}
-                </span>
-                <span className="text-neutral-500">{manager.roleLabel}</span>
-              </li>
+              <ServiceClientManagerRow
+                key={manager.id}
+                managerId={manager.id}
+                name={manager.name}
+                email={manager.email}
+                roleLabel={manager.roleLabel}
+              />
             ))
           )}
         </ul>

@@ -1,2 +1,6 @@
 export const FREE_PARTNERSHIP_MESSAGE =
-  "Para se tornar parceiro da Administradora, o fornecedor precisa estar no plano Intermediário ou superior. Oriente o fornecedor a fazer upgrade.";
+  "Empresas aptas podem ser vinculadas como parceiras. Parceiros entram na prioridade 1 do motor de distribuição (plano pago + categoria opcional).";
+
+/** Mensagem genérica LGPD — não revela plano nem motivo de inaptidão. */
+export const PARTNERSHIP_UNAVAILABLE_MESSAGE =
+  "Empresa indisponível para vínculo no momento.";

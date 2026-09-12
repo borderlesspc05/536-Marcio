@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { jwtVerify } from "jose";
+import { WHITELABEL_RESERVED_SLUGS } from "@/features/master-service/whitelabel-url";
 
 const SESSION_COOKIE = "cotacondo_session";
 
@@ -41,9 +42,23 @@ export async function middleware(request: NextRequest) {
     }
   }
 
+  // Whitelabel curto: /selladm → /s/selladm (sem afetar rotas reservadas)
+  const segments = pathname.split("/").filter(Boolean);
+  if (segments.length === 1) {
+    const slug = segments[0].toLowerCase();
+    if (!WHITELABEL_RESERVED_SLUGS.has(slug) && !slug.includes(".")) {
+      const url = request.nextUrl.clone();
+      url.pathname = `/s/${segments[0]}`;
+      return NextResponse.rewrite(url);
+    }
+  }
+
   return NextResponse.next();
 }
 
 export const config = {
-  matcher: ["/app/:path*"],
+  matcher: [
+    "/app/:path*",
+    "/((?!_next/static|_next/image|favicon.ico|brand/|templates/).*)",
+  ],
 };

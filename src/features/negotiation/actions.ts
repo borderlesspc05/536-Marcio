@@ -11,6 +11,7 @@ import {
   approveOthersSchema,
   negotiateSchema,
   negotiationMessageSchema,
+  negotiationMessagesBulkSchema,
   updateProposalConditionsSchema,
 } from "@/features/negotiation/schemas";
 import { emitDomainEvent } from "@/lib/domain-events";
@@ -73,6 +74,7 @@ export async function startNegotiationAction(formData: FormData): Promise<Action
       }
     });
 
+    const supplierOrgIds = [...new Set(proposals.map((item) => item.organizationId))];
     await emitDomainEvent({
       type: "negotiation.started",
       entityType: "quotation",
@@ -82,7 +84,9 @@ export async function startNegotiationAction(formData: FormData): Promise<Action
         proposalIds: proposals.map((item) => item.id),
         quotationId,
         solicitanteOrgId: session.organizationId,
-        supplierOrgId: proposals[0]?.organizationId,
+        supplierOrgIds,
+        supplierOrgId: supplierOrgIds[0],
+        preview: parsed.data.message.slice(0, 120),
       },
     });
 
@@ -95,7 +99,13 @@ export async function startNegotiationAction(formData: FormData): Promise<Action
 
     revalidatePath(`/app/cotacoes/${quotationId}`);
     revalidatePath("/app/oportunidades");
-    return { ok: true, message: "Negociação iniciada." };
+    return {
+      ok: true,
+      message:
+        supplierOrgIds.length > 1
+          ? `Mensagem enviada e notificação disparada para ${supplierOrgIds.length} fornecedores.`
+          : "Mensagem enviada e fornecedor notificado.",
+    };
   } catch (error) {
     return { ok: false, message: toPublicErrorMessage(error) };
   }
@@ -164,6 +174,79 @@ export async function sendNegotiationMessageAction(formData: FormData): Promise<
     revalidatePath(`/app/cotacoes/${proposal.quotationId}`);
     revalidatePath("/app/oportunidades");
     return { ok: true, message: "Mensagem enviada." };
+  } catch (error) {
+    return { ok: false, message: toPublicErrorMessage(error) };
+  }
+}
+
+export async function sendNegotiationMessagesBulkAction(formData: FormData): Promise<ActionResult> {
+  try {
+    const session = await requireSolicitante();
+    const proposalIds = formData.getAll("proposalIds").map(String).filter(Boolean);
+    const parsed = negotiationMessagesBulkSchema.safeParse({
+      proposalIds,
+      body: formData.get("body") ?? formData.get("message"),
+    });
+    if (!parsed.success) {
+      return { ok: false, message: parsed.error.issues[0]?.message ?? "Dados inválidos" };
+    }
+
+    const proposals = await firestoreDb.proposal.findMany({
+      where: {
+        id: { in: parsed.data.proposalIds },
+        quotation: { organizationId: session.organizationId },
+      },
+      include: { quotation: true },
+    });
+    if (proposals.length === 0) {
+      return { ok: false, message: "Nenhuma proposta válida selecionada." };
+    }
+
+    const inNegotiation = proposals.filter(
+      (item) => item.status === "em_negociacao" || item.quotation.status === "em_negociacao",
+    );
+    if (inNegotiation.length === 0) {
+      return { ok: false, message: "Propostas não estão em negociação." };
+    }
+
+    const quotationId = inNegotiation[0]!.quotationId;
+    const supplierOrgIds = [...new Set(inNegotiation.map((item) => item.organizationId))];
+
+    for (const proposal of inNegotiation) {
+      await firestoreDb.negotiationMessage.create({
+        data: {
+          proposalId: proposal.id,
+          organizationId: session.organizationId,
+          authorUserId: session.userId,
+          body: parsed.data.body,
+        },
+      });
+    }
+
+    await emitDomainEvent({
+      type: "negotiation.message",
+      entityType: "quotation",
+      entityId: quotationId,
+      organizationId: session.organizationId,
+      payload: {
+        quotationId,
+        proposalIds: inNegotiation.map((item) => item.id),
+        solicitanteOrgId: session.organizationId,
+        supplierOrgIds,
+        supplierOrgId: supplierOrgIds[0],
+        preview: parsed.data.body.slice(0, 120),
+      },
+    });
+
+    revalidatePath(`/app/cotacoes/${quotationId}`);
+    revalidatePath("/app/oportunidades");
+    return {
+      ok: true,
+      message:
+        supplierOrgIds.length > 1
+          ? `Mensagem enviada para ${supplierOrgIds.length} fornecedores.`
+          : "Mensagem enviada.",
+    };
   } catch (error) {
     return { ok: false, message: toPublicErrorMessage(error) };
   }

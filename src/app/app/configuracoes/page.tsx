@@ -19,7 +19,9 @@ import { MemberRole, OrganizationType } from "@/lib/domain/types";
 import { getSession } from "@/lib/auth/session";
 import { firestoreDb } from "@/lib/firebase/firestore-db";
 import { UpdateProfileForm } from "@/features/auth/components/UpdateProfileForm";
+import { SupplierInviteUsersCard } from "@/features/auth/components/SupplierInviteUsersCard";
 import { profileLabel } from "@/features/navigation/menu";
+import { getPlanGate, can } from "@/features/billing/plan-gate";
 
 const DATE_FORMAT = new Intl.DateTimeFormat("pt-BR", {
   day: "2-digit",
@@ -31,6 +33,7 @@ const ACTIVITY_LABELS: Record<string, string> = {
   "auth.register": "Conta criada",
   "auth.profile_updated": "Nome de exibição atualizado",
   "auth.password_reset_completed": "Senha de acesso redefinida",
+  "auth.password_changed": "Senha de acesso alterada",
   "auth.password_reset_requested": "Redefinição de senha solicitada",
   "auth.login_success": "Novo acesso à conta",
   "auth.login_failed": "Tentativa de acesso não concluída",
@@ -64,7 +67,7 @@ export default async function Page() {
   const session = await getSession();
   if (!session) redirect("/acesse");
 
-  const [user, organization, subscription, activity] = await Promise.all([
+  const [user, organization, subscription, activity, planGate] = await Promise.all([
     firestoreDb.user.findUniqueOrThrow({
       where: { id: session.userId },
       select: {
@@ -83,12 +86,15 @@ export default async function Page() {
         document: true,
         type: true,
         createdAt: true,
+        logoUrl: true,
+        primaryColor: true,
+        secondaryColor: true,
         _count: { select: { members: true } },
       },
     }),
     firestoreDb.subscription.findFirst({
       where: { organizationId: session.organizationId },
-      include: { plan: { select: { name: true } } },
+      include: { plan: { select: { name: true, isFree: true } } },
       orderBy: { createdAt: "desc" },
     }),
     firestoreDb.auditLog.findMany({
@@ -97,6 +103,7 @@ export default async function Page() {
       orderBy: { createdAt: "desc" },
       take: 4,
     }),
+    getPlanGate(session.organizationId),
   ]);
 
   const isAdministrator = session.role === MemberRole.master;
@@ -107,6 +114,12 @@ export default async function Page() {
   ];
   const hasPlanArea = planOrganizationTypes.includes(session.organizationType);
   const profile = profileLabel(session.organizationType, session.role);
+  const showWhitelabelBrand =
+    (session.organizationType === OrganizationType.administradora ||
+      session.organizationType === OrganizationType.sindico) &&
+    Boolean(
+      can(planGate, "whitelabel") || can(planGate, "rif") || can(planGate, "cotaService"),
+    );
   const completionItems = [
     { label: "Nome definido", complete: user.name.trim().length >= 2 },
     { label: "E-mail confirmado", complete: Boolean(user.emailVerifiedAt) },
@@ -130,8 +143,17 @@ export default async function Page() {
         <div className="pointer-events-none absolute -right-16 -top-20 h-56 w-56 rounded-full bg-[#9333EA]/30 blur-3xl" />
         <div className="relative flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex min-w-0 items-center gap-4">
-            <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl border border-white/15 bg-white/10 text-xl font-bold shadow-inner">
-              {initials(user.name)}
+            <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-white/15 bg-white/10 text-xl font-bold shadow-inner">
+              {organization.logoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={organization.logoUrl}
+                  alt={organization.name}
+                  className="h-full w-full object-contain"
+                />
+              ) : (
+                initials(user.name)
+              )}
             </div>
             <div className="min-w-0">
               <h2 className="truncate text-xl font-bold">{user.name}</h2>
@@ -174,13 +196,6 @@ export default async function Page() {
             <div className="mt-6 grid gap-5 border-b border-black/[0.06] pb-6 sm:grid-cols-2">
               <div className="rounded-xl bg-neutral-50 px-4 py-3.5">
                 <div className="flex items-center gap-2 text-xs font-medium text-neutral-500">
-                  <Mail className="h-3.5 w-3.5" />
-                  E-mail de acesso
-                </div>
-                <p className="mt-2 truncate text-sm font-semibold text-neutral-900">{user.email}</p>
-              </div>
-              <div className="rounded-xl bg-neutral-50 px-4 py-3.5">
-                <div className="flex items-center gap-2 text-xs font-medium text-neutral-500">
                   <CalendarDays className="h-3.5 w-3.5" />
                   Conta criada em
                 </div>
@@ -188,12 +203,39 @@ export default async function Page() {
                   {DATE_FORMAT.format(user.createdAt)}
                 </p>
               </div>
+              <div className="rounded-xl bg-neutral-50 px-4 py-3.5">
+                <div className="flex items-center gap-2 text-xs font-medium text-neutral-500">
+                  <Mail className="h-3.5 w-3.5" />
+                  E-mail atual
+                </div>
+                <p className="mt-2 truncate text-sm font-semibold text-neutral-900">{user.email}</p>
+              </div>
             </div>
 
             <div className="mt-6">
-              <UpdateProfileForm defaultName={user.name} />
+              <UpdateProfileForm
+                defaultName={user.name}
+                defaultEmail={user.email}
+                logoUrl={organization.logoUrl}
+                showLogoUpload={
+                  session.organizationType === OrganizationType.fornecedor ||
+                  session.organizationType === OrganizationType.administradora ||
+                  session.organizationType === OrganizationType.sindico
+                }
+                showWhitelabelBrand={showWhitelabelBrand}
+                primaryColor={
+                  (organization as { primaryColor?: string | null }).primaryColor ?? "#9333EA"
+                }
+                secondaryColor={
+                  (organization as { secondaryColor?: string | null }).secondaryColor ?? "#14B8A6"
+                }
+              />
             </div>
           </section>
+
+          {session.organizationType === OrganizationType.fornecedor ? (
+            <SupplierInviteUsersCard isFreePlan={planGate?.isFree ?? subscription?.plan.isFree ?? true} />
+          ) : null}
 
           <section className="rounded-2xl border border-black/[0.06] bg-white p-6 shadow-sm sm:p-7">
             <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">

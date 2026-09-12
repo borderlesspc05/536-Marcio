@@ -20,6 +20,7 @@ import {
   issueSessionForUser,
 } from "@/lib/auth/establish-session";
 import { verifyPassword } from "@/lib/auth/password";
+import { requireAuthorizedSession } from "@/lib/auth/guards";
 import {
   firebaseSendPasswordResetEmail,
   firebaseSignInWithPassword,
@@ -515,18 +516,35 @@ export async function updateProfileAction(formData: FormData): Promise<ActionRes
     }
 
     const name = String(formData.get("name") ?? "").trim();
+    const email = String(formData.get("email") ?? "")
+      .trim()
+      .toLowerCase();
     if (name.length < 2) {
       return { ok: false, message: "Informe um nome com pelo menos 2 caracteres." };
+    }
+    if (!email.includes("@")) {
+      return { ok: false, message: "Informe um e-mail de acesso válido." };
     }
 
     const previous = await firestoreDb.user.findUnique({
       where: { id: session.userId },
-      select: { name: true },
+      select: { name: true, email: true },
     });
+
+    if (previous?.email !== email) {
+      const taken = await firestoreDb.user.findUnique({ where: { email } });
+      if (taken && taken.id !== session.userId) {
+        return { ok: false, message: "Este e-mail já está em uso por outra conta." };
+      }
+    }
 
     await firestoreDb.user.update({
       where: { id: session.userId },
-      data: { name },
+      data: {
+        name,
+        email,
+        ...(previous?.email !== email ? { emailVerifiedAt: null } : {}),
+      },
     });
 
     await writeAuditLog({
@@ -534,14 +552,285 @@ export async function updateProfileAction(formData: FormData): Promise<ActionRes
       action: "auth.profile_updated",
       entityType: "user",
       entityId: session.userId,
-      metadata: { previousName: previous?.name ?? null, name },
+      metadata: {
+        previousName: previous?.name ?? null,
+        name,
+        previousEmail: previous?.email ?? null,
+        email,
+      },
     });
 
     const { revalidatePath } = await import("next/cache");
     revalidatePath("/app/configuracoes");
     revalidatePath("/app");
 
-    return { ok: true, message: "Perfil atualizado." };
+    return {
+      ok: true,
+      message:
+        previous?.email !== email
+          ? "Perfil atualizado. O e-mail foi alterado — confirme o novo endereço se solicitado."
+          : "Perfil atualizado.",
+    };
+  } catch (error) {
+    return { ok: false, message: toPublicErrorMessage(error) };
+  }
+}
+
+export async function changePasswordAction(formData: FormData): Promise<ActionResult> {
+  try {
+    const { getSession } = await import("@/lib/auth/session");
+    const session = await getSession();
+    if (!session) return { ok: false, message: "Faça login para continuar." };
+
+    const currentPassword = String(formData.get("currentPassword") ?? "");
+    const newPassword = String(formData.get("newPassword") ?? "");
+    const confirmPassword = String(formData.get("confirmPassword") ?? "");
+
+    if (newPassword.length < 6) {
+      return { ok: false, message: "A nova senha deve ter pelo menos 6 caracteres." };
+    }
+    if (newPassword !== confirmPassword) {
+      return { ok: false, message: "A confirmação da nova senha não confere." };
+    }
+
+    const user = await firestoreDb.user.findUnique({
+      where: { id: session.userId },
+      select: { passwordHash: true },
+    });
+    if (!user?.passwordHash) {
+      return { ok: false, message: "Conta sem senha local. Use a recuperação de senha." };
+    }
+
+    const valid = await verifyPassword(currentPassword, user.passwordHash);
+    if (!valid) return { ok: false, message: "Senha atual incorreta." };
+
+    await firestoreDb.user.update({
+      where: { id: session.userId },
+      data: { passwordHash: await hashPassword(newPassword) },
+    });
+
+    await writeAuditLog({
+      userId: session.userId,
+      action: "auth.password_changed",
+      entityType: "user",
+      entityId: session.userId,
+    });
+
+    const { revalidatePath } = await import("next/cache");
+    revalidatePath("/app/configuracoes");
+    return { ok: true, message: "Senha alterada com sucesso." };
+  } catch (error) {
+    return { ok: false, message: toPublicErrorMessage(error) };
+  }
+}
+
+export async function updateOrganizationLogoAction(formData: FormData): Promise<ActionResult> {
+  try {
+    const { getSession } = await import("@/lib/auth/session");
+    const session = await getSession();
+    if (!session) return { ok: false, message: "Faça login para continuar." };
+
+    const file = formData.get("logo");
+    if (!(file instanceof File) || file.size === 0) {
+      return { ok: false, message: "Selecione uma imagem de logo." };
+    }
+    if (!file.type.startsWith("image/")) {
+      return { ok: false, message: "Envie uma imagem (PNG, JPG ou WEBP)." };
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      return { ok: false, message: "Logo deve ter no máximo 2MB." };
+    }
+
+    // Data URL garante exibição mesmo sem bucket Firebase Storage
+    const bytes = Buffer.from(await file.arrayBuffer());
+    const dataUrl = `data:${file.type || "image/png"};base64,${bytes.toString("base64")}`;
+
+    let logoStoragePath: string | null = null;
+    try {
+      const { storeOrganizationLogo } = await import("@/lib/storage");
+      const stored = await storeOrganizationLogo({
+        organizationId: session.organizationId,
+        file,
+      });
+      logoStoragePath = stored.storagePath;
+    } catch (error) {
+      console.warn("[logo] Storage opcional falhou; logo salva só como data URL.", error);
+    }
+
+    await firestoreDb.organization.update({
+      where: { id: session.organizationId },
+      data: {
+        logoUrl: dataUrl,
+        ...(logoStoragePath ? { logoStoragePath } : {}),
+      },
+    });
+
+    const linkedClient = await firestoreDb.serviceClient.findFirst({
+      where: { clientOrgId: session.organizationId },
+    });
+    if (linkedClient) {
+      await firestoreDb.serviceClient.update({
+        where: { id: linkedClient.id },
+        data: { logoUrl: dataUrl },
+      });
+    }
+
+    await writeAuditLog({
+      userId: session.userId,
+      action: "organization.logo_updated",
+      entityType: "organization",
+      entityId: session.organizationId,
+    });
+
+    const { revalidatePath } = await import("next/cache");
+    revalidatePath("/app/configuracoes");
+    revalidatePath("/app");
+    return { ok: true, message: "Logo atualizada." };
+  } catch (error) {
+    return { ok: false, message: toPublicErrorMessage(error) };
+  }
+}
+
+export async function updateOrganizationBrandAction(formData: FormData): Promise<ActionResult> {
+  try {
+    const { getSession } = await import("@/lib/auth/session");
+    const session = await getSession();
+    if (!session) return { ok: false, message: "Faça login para continuar." };
+
+    if (
+      session.organizationType !== OrganizationType.administradora &&
+      session.organizationType !== OrganizationType.sindico
+    ) {
+      return { ok: false, message: "Paleta disponível apenas para solicitantes." };
+    }
+
+    const { can, getPlanGate } = await import("@/features/billing/plan-gate");
+    const gate = await getPlanGate(session.organizationId);
+    if (!can(gate, "whitelabel") && !can(gate, "rif") && !can(gate, "cotaService")) {
+      return { ok: false, message: "Paleta de cores disponível no plano Premium / Cota Service." };
+    }
+
+    const primaryColor = String(formData.get("primaryColor") || "").trim();
+    const secondaryColor = String(formData.get("secondaryColor") || "").trim();
+    const hex = /^#[0-9A-Fa-f]{6}$/;
+    if (!hex.test(primaryColor) || !hex.test(secondaryColor)) {
+      return { ok: false, message: "Informe cores hexadecimais válidas (#RRGGBB)." };
+    }
+
+    await firestoreDb.organization.update({
+      where: { id: session.organizationId },
+      data: { primaryColor, secondaryColor },
+    });
+
+    const linkedClient = await firestoreDb.serviceClient.findFirst({
+      where: { clientOrgId: session.organizationId },
+    });
+    if (linkedClient) {
+      await firestoreDb.serviceClient.update({
+        where: { id: linkedClient.id },
+        data: { primaryColor, secondaryColor },
+      });
+    }
+
+    await writeAuditLog({
+      userId: session.userId,
+      action: "organization.brand_updated",
+      entityType: "organization",
+      entityId: session.organizationId,
+      metadata: { primaryColor, secondaryColor },
+    });
+
+    const { revalidatePath } = await import("next/cache");
+    revalidatePath("/app/configuracoes");
+    revalidatePath("/app");
+    return { ok: true, message: "Paleta de cores salva." };
+  } catch (error) {
+    return { ok: false, message: toPublicErrorMessage(error) };
+  }
+}
+
+export async function inviteSupplierUserAction(formData: FormData): Promise<ActionResult & { upgradeRequired?: boolean; tempPassword?: string }> {
+  try {
+    const session = await requireAuthorizedSession({
+      types: [OrganizationType.fornecedor],
+      roles: [MemberRole.master],
+      href: "/app/configuracoes",
+    });
+
+    const { getPlanGate } = await import("@/features/billing/plan-gate");
+    const gate = await getPlanGate(session.organizationId);
+    if (!gate || gate.isFree) {
+      return {
+        ok: false,
+        upgradeRequired: true,
+        message: "Cadastrar novos usuários está disponível nos planos pagos. Faça upgrade.",
+      };
+    }
+
+    const email = String(formData.get("email") ?? "")
+      .trim()
+      .toLowerCase();
+    const name = String(formData.get("name") ?? "").trim();
+    if (!email.includes("@") || name.length < 2) {
+      return { ok: false, message: "Informe nome e e-mail válidos." };
+    }
+
+    const { randomBytes } = await import("crypto");
+    const existing = await firestoreDb.user.findUnique({ where: { email } });
+    if (existing) {
+      const already = await firestoreDb.organizationMember.findUnique({
+        where: {
+          userId_organizationId: {
+            userId: existing.id,
+            organizationId: session.organizationId,
+          },
+        },
+      });
+      if (already) return { ok: false, message: "Usuário já está na organização." };
+      await firestoreDb.organizationMember.create({
+        data: {
+          userId: existing.id,
+          organizationId: session.organizationId,
+          role: MemberRole.operational,
+        },
+      });
+      const { revalidatePath } = await import("next/cache");
+      revalidatePath("/app/configuracoes");
+      return { ok: true, message: "Usuário vinculado à organização." };
+    }
+
+    const tempPassword = `Convite@${randomBytes(3).toString("hex")}`;
+    const passwordHash = await hashPassword(tempPassword);
+    const created = await firestoreDb.user.create({
+      data: {
+        email,
+        name,
+        passwordHash,
+        referralCode: `CC-${Math.random().toString(36).slice(2, 10).toUpperCase()}`,
+        memberships: {
+          create: {
+            organizationId: session.organizationId,
+            role: MemberRole.operational,
+          },
+        },
+      },
+    });
+
+    await writeAuditLog({
+      userId: session.userId,
+      action: "team.invited",
+      entityType: "user",
+      entityId: created.id,
+      metadata: { email, organizationType: "fornecedor" },
+    });
+
+    const { revalidatePath } = await import("next/cache");
+    revalidatePath("/app/configuracoes");
+    return {
+      ok: true,
+      message: "Usuário cadastrado.",
+      tempPassword: process.env.NEXT_PUBLIC_APP_ENV !== "production" ? tempPassword : undefined,
+    };
   } catch (error) {
     return { ok: false, message: toPublicErrorMessage(error) };
   }

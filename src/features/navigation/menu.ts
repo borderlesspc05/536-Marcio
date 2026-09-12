@@ -29,6 +29,11 @@ export type NavItem = {
 
 const ALL_ITEMS: NavItem[] = [
   {
+    label: "Dashboard",
+    href: "/app",
+    icon: LayoutDashboard,
+  },
+  {
     label: "Minhas Cotações",
     href: "/app/aprovador/cotacoes",
     icon: ClipboardList,
@@ -51,11 +56,6 @@ const ALL_ITEMS: NavItem[] = [
     href: "/app/service/calendario",
     icon: CalendarDays,
     types: [OrganizationType.master_service],
-  },
-  {
-    label: "Dashboard",
-    href: "/app",
-    icon: LayoutDashboard,
   },
   {
     label: "Condomínios",
@@ -102,16 +102,7 @@ const ALL_ITEMS: NavItem[] = [
     href: "/app/parcerias",
     icon: Handshake,
     types: [OrganizationType.administradora],
-    roles: [MemberRole.master],
     feature: "partnerships",
-  },
-  {
-    label: "Favoritos",
-    href: "/app/favoritos",
-    icon: Handshake,
-    types: [OrganizationType.administradora],
-    roles: [MemberRole.master],
-    feature: "favorites",
   },
   {
     label: "Financeiro",

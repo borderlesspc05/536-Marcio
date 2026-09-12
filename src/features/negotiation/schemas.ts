@@ -10,6 +10,11 @@ export const negotiationMessageSchema = z.object({
   body: z.string().trim().min(1, "Mensagem vazia."),
 });
 
+export const negotiationMessagesBulkSchema = z.object({
+  proposalIds: z.array(z.string().min(1)).min(1, "Selecione ao menos uma proposta."),
+  body: z.string().trim().min(1, "Mensagem vazia."),
+});
+
 export const approveConditionSchema = z.object({
   proposalId: z.string().min(1),
   conditionId: z.string().min(1),

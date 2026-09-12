@@ -1,5 +1,6 @@
 import { DEFAULT_RIF_BRAND, type RifBrand } from "@/features/master-service/rif";
 import { can, getPlanGate } from "@/features/billing/plan-gate";
+import { firestoreDb } from "@/lib/firebase/firestore-db";
 
 type ServiceClientBrand = {
   displayName: string;
@@ -27,11 +28,25 @@ export async function resolveRifBrand(input: {
   const gate = await getPlanGate(input.organizationId);
   const premiumWhitelabel = can(gate, "whitelabel") || can(gate, "rif") || can(gate, "cotaService");
   if (premiumWhitelabel) {
+    const org = await firestoreDb.organization.findUnique({
+      where: { id: input.organizationId },
+      select: {
+        name: true,
+        logoUrl: true,
+        primaryColor: true,
+        secondaryColor: true,
+      },
+    });
+
     return {
-      displayName: input.organizationName || gate?.planName || "Solicitante",
-      primaryColor: DEFAULT_RIF_BRAND.primaryColor,
-      secondaryColor: DEFAULT_RIF_BRAND.secondaryColor,
-      logoUrl: DEFAULT_RIF_BRAND.logoUrl,
+      displayName: org?.name || input.organizationName || gate?.planName || "Solicitante",
+      primaryColor:
+        (org as { primaryColor?: string | null } | null)?.primaryColor ||
+        DEFAULT_RIF_BRAND.primaryColor,
+      secondaryColor:
+        (org as { secondaryColor?: string | null } | null)?.secondaryColor ||
+        DEFAULT_RIF_BRAND.secondaryColor,
+      logoUrl: org?.logoUrl || DEFAULT_RIF_BRAND.logoUrl,
       whitelabel: true,
     };
   }

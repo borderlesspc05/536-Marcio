@@ -4,7 +4,7 @@ import { readStoredFile } from "@/lib/storage";
 import { firestoreDb } from "@/lib/firebase/firestore-db";
 import { OrganizationType } from "@/lib/domain/types";
 
-/** Download autenticado de anexo (proposta/cotação) por storagePath. */
+/** Download autenticado de anexo (proposta/cotação/compliance) por storagePath. */
 export async function GET(request: Request) {
   const session = await getSession();
   if (!session) {
@@ -14,11 +14,11 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const storagePath = url.searchParams.get("path");
   const preferredName = url.searchParams.get("name");
+  const inline = url.searchParams.get("inline") === "1";
   if (!storagePath) {
     return NextResponse.json({ error: "path obrigatório" }, { status: 400 });
   }
 
-  // Autorização leve: o path deve pertencer a org da sessão ou a cotação service gerenciada.
   const isLocalOrGs = storagePath.startsWith("local://") || storagePath.startsWith("gs://");
   if (!isLocalOrGs) {
     return NextResponse.json({ error: "path inválido" }, { status: 400 });
@@ -45,24 +45,45 @@ export async function GET(request: Request) {
         include: { quotation: true },
       });
 
-  if (!attachment && !quotationAttachment) {
+  const complianceDoc =
+    attachment || quotationAttachment
+      ? null
+      : await firestoreDb.complianceDocument.findFirst({
+          where: { storagePath },
+        });
+
+  if (!attachment && !quotationAttachment && !complianceDoc) {
     return NextResponse.json({ error: "Anexo não encontrado" }, { status: 404 });
   }
 
-  const quotation = attachment
-    ? attachment.condition.proposal.quotation
-    : quotationAttachment!.quotation;
+  let allowed = false;
+  let fileName = preferredName || "arquivo";
+  let contentTypeHint: string | null = null;
 
-  const supplierOwns =
-    Boolean(attachment) &&
-    session.organizationType === OrganizationType.fornecedor &&
-    attachment!.condition.proposal.organizationId === session.organizationId;
+  if (complianceDoc) {
+    fileName = preferredName || complianceDoc.fileName;
+    contentTypeHint = complianceDoc.contentType;
+    allowed =
+      session.organizationType === OrganizationType.master_admin ||
+      (session.organizationType === OrganizationType.fornecedor &&
+        complianceDoc.organizationId === session.organizationId);
+  } else {
+    const quotation = attachment
+      ? attachment.condition.proposal.quotation
+      : quotationAttachment!.quotation;
 
-  const allowed =
-    supplierOwns ||
-    quotation.organizationId === session.organizationId ||
-    (session.organizationType === OrganizationType.master_service &&
-      quotation.serviceManagedByOrgId === session.organizationId);
+    const supplierOwns =
+      Boolean(attachment) &&
+      session.organizationType === OrganizationType.fornecedor &&
+      attachment!.condition.proposal.organizationId === session.organizationId;
+
+    allowed =
+      supplierOwns ||
+      quotation.organizationId === session.organizationId ||
+      (session.organizationType === OrganizationType.master_service &&
+        quotation.serviceManagedByOrgId === session.organizationId) ||
+      session.organizationType === OrganizationType.master_admin;
+  }
 
   if (!allowed) {
     return NextResponse.json({ error: "Sem permissão" }, { status: 403 });
@@ -70,12 +91,14 @@ export async function GET(request: Request) {
 
   try {
     const file = await readStoredFile(storagePath);
-    const fileName = preferredName || file.fileName;
+    const resolvedName = preferredName || file.fileName || fileName;
+    const contentType = contentTypeHint || file.contentType || "application/octet-stream";
+    const disposition = inline ? "inline" : "attachment";
     return new NextResponse(new Uint8Array(file.buffer), {
       status: 200,
       headers: {
-        "Content-Type": file.contentType,
-        "Content-Disposition": `attachment; filename="${fileName.replace(/"/g, "")}"`,
+        "Content-Type": contentType,
+        "Content-Disposition": `${disposition}; filename="${resolvedName.replace(/"/g, "")}"`,
         "Cache-Control": "private, no-store",
       },
     });

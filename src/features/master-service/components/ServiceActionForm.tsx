@@ -9,6 +9,7 @@ type Props = {
   className?: string;
   children: ReactNode;
   onSuccessRefresh?: boolean;
+  pendingLabel?: string;
 };
 
 /** Formulário Master Service com feedback de erro/sucesso (não engole ActionResult). */
@@ -17,6 +18,7 @@ export function ServiceActionForm({
   className,
   children,
   onSuccessRefresh = true,
+  pendingLabel = "Processando…",
 }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -29,6 +31,7 @@ export function ServiceActionForm({
         event.preventDefault();
         const form = event.currentTarget;
         const formData = new FormData(form);
+        setResult(null);
         startTransition(async () => {
           const next = await action(formData);
           setResult(next);
@@ -36,6 +39,11 @@ export function ServiceActionForm({
         });
       }}
     >
+      {pending ? (
+        <p className="mb-2 text-sm font-semibold text-[#c10089]" aria-live="polite">
+          {pendingLabel}
+        </p>
+      ) : null}
       <fieldset disabled={pending} className="contents">
         {children}
       </fieldset>

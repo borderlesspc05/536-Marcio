@@ -92,6 +92,7 @@ const RELATIONS: Record<string, Record<string, Relation>> = {
     partnershipsAsSupplier: { model: "partnership", many: true, foreignKey: "supplierOrgId" },
     commissionAgreements: { model: "commissionAgreement", many: true, foreignKey: "admOrgId" },
     commissionAsSupplier: { model: "commissionAgreement", many: true, foreignKey: "supplierOrgId" },
+    serviceClientProfile: { model: "serviceClient", foreignKey: "clientOrgId" },
   },
   organizationMember: {
     user: { model: "user", localKey: "userId" },
@@ -228,6 +229,8 @@ const RELATIONS: Record<string, Record<string, Relation>> = {
   },
   quotationExternalApproval: {
     quotation: { model: "quotation", localKey: "quotationId" },
+    approvedBy: { model: "user", localKey: "approvedByUserId" },
+    proposal: { model: "proposal", localKey: "proposalId" },
   },
   serviceAppointment: {
     organization: { model: "organization", localKey: "organizationId" },

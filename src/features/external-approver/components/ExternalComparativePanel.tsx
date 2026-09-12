@@ -19,6 +19,7 @@ type Props = {
   proposals: ProposalRow[];
   approvedProposalId: string | null;
   rif?: RifBlock | null;
+  quotationId?: string;
 };
 
 function parseComparative(json: string): RifComparativeRow[] {
@@ -32,16 +33,33 @@ function parseComparative(json: string): RifComparativeRow[] {
   }
 }
 
-export function ExternalComparativePanel({ proposals, approvedProposalId, rif }: Props) {
+export function ExternalComparativePanel({
+  proposals,
+  approvedProposalId,
+  rif,
+  quotationId,
+}: Props) {
   const comparativeRows = rif ? parseComparative(rif.comparativeJson) : [];
 
   return (
     <div className="space-y-6">
       <section className="rounded-2xl border border-black/5 bg-white/80 p-5">
-        <h2 className="font-semibold text-neutral-900">Quadro comparativo</h2>
-        <p className="mt-1 text-sm text-neutral-500">
-          Valores e condições de pagamento das propostas recebidas.
-        </p>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h2 className="font-semibold text-neutral-900">Quadro comparativo</h2>
+            <p className="mt-1 text-sm text-neutral-500">
+              Valores e condições de pagamento das propostas recebidas.
+            </p>
+          </div>
+          {quotationId ? (
+            <a
+              href={`/api/app/quotations/${quotationId}/proposals-export`}
+              className="rounded-xl border border-[#c10089]/30 px-3 py-1.5 text-xs font-semibold text-[#c10089]"
+            >
+              Baixar propostas
+            </a>
+          ) : null}
+        </div>
         <div className="mt-4 overflow-x-auto">
           <table className="w-full min-w-[640px] text-left text-sm">
             <thead className="border-b border-black/5 text-neutral-500">

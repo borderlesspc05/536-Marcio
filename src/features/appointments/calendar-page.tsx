@@ -67,23 +67,44 @@ export async function renderCalendarPage({
 
   const canManage = true;
 
+  const toIso = (value: unknown) => {
+    if (value instanceof Date && !Number.isNaN(value.getTime())) return value.toISOString();
+    if (typeof value === "string" || typeof value === "number") {
+      const date = new Date(value);
+      if (!Number.isNaN(date.getTime())) return date.toISOString();
+    }
+    return new Date().toISOString();
+  };
+
   const serialized = appointments.map((row) => ({
     id: row.id,
-    appointmentDate: row.appointmentDate.toISOString(),
+    appointmentDate: toIso(row.appointmentDate),
     leadMode: row.leadMode,
     source: row.source,
-    condominium: row.condominium,
-    category: row.category,
+    notes: row.notes ?? null,
+    condominium: row.condominium ?? { name: "—" },
+    category: row.category ?? { name: "—" },
     serviceItem: row.serviceItem,
     externalApproval: row.externalApproval
       ? {
-          reason: row.externalApproval.reason,
-          approvedAt: row.externalApproval.approvedAt.toISOString(),
-          approvedBy: row.externalApproval.approvedBy,
-          proposal: row.externalApproval.proposal,
+          reason: row.externalApproval.reason ?? "",
+          approvedAt: toIso(
+            row.externalApproval.approvedAt ?? row.externalApproval.createdAt,
+          ),
+          approvedBy: row.externalApproval.approvedBy ?? { name: "Aprovador" },
+          proposal: row.externalApproval.proposal ?? null,
         }
       : null,
   }));
+
+  const now = Date.now();
+  const upcoming = [...serialized]
+    .filter((row) => new Date(row.appointmentDate).getTime() >= now - 12 * 60 * 60 * 1000)
+    .sort(
+      (a, b) =>
+        new Date(a.appointmentDate).getTime() - new Date(b.appointmentDate).getTime(),
+    )
+    .slice(0, 10);
 
   return (
     <div className="space-y-6">
@@ -101,7 +122,11 @@ export async function renderCalendarPage({
         />
       </Suspense>
 
-      <AppointmentListPanel appointments={serialized} canManage={canManage} />
+      <AppointmentListPanel
+        appointments={serialized}
+        upcoming={upcoming}
+        canManage={canManage}
+      />
 
       {allowCreate && canManage ? (
         <AppointmentCreateForm
